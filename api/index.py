@@ -29,6 +29,8 @@ def get_pipeline():
     return _pipeline
 
 
+# Root route - handles /api and /api/
+@app.route("/")
 @app.route("/api")
 @app.route("/api/")
 def home():
@@ -46,6 +48,7 @@ def home():
     })
 
 
+@app.route("/analyze", methods=["POST", "OPTIONS"])
 @app.route("/api/analyze", methods=["POST", "OPTIONS"])
 def analyze():
     if request.method == "OPTIONS":
@@ -64,6 +67,7 @@ def analyze():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/history", methods=["GET"])
 @app.route("/api/history", methods=["GET"])
 def history():
     limit = request.args.get("limit", 10, type=int)
@@ -74,6 +78,7 @@ def history():
     return jsonify({"analyses": [], "note": "MongoDB not configured"})
 
 
+@app.route("/task", methods=["GET"])
 @app.route("/api/task", methods=["GET"])
 def get_task():
     task_id = request.args.get("id")
@@ -89,6 +94,7 @@ def get_task():
     return jsonify({"error": "MongoDB not configured"}), 503
 
 
+@app.route("/override", methods=["POST", "OPTIONS"])
 @app.route("/api/override", methods=["POST", "OPTIONS"])
 def override():
     if request.method == "OPTIONS":
@@ -105,9 +111,20 @@ def override():
     })
 
 
+@app.route("/patterns", methods=["GET"])
 @app.route("/api/patterns", methods=["GET"])
 def patterns():
     pipeline = get_pipeline()
     if pipeline.ledger:
         return jsonify({"patterns": pipeline.ledger.get_fragile_patterns()})
     return jsonify({"patterns": []})
+
+
+# Catch-all for debugging
+@app.route("/<path:path>")
+def catch_all(path):
+    return jsonify({
+        "error": "Route not found",
+        "requested_path": path,
+        "available_routes": ["/", "/analyze", "/history", "/task", "/override", "/patterns"]
+    }), 404
