@@ -1,13 +1,18 @@
 # MPRG - Multi-Path Reasoning Guard
+# Render deployment
 
-pymongo
-dnspython
-voyageai
-chromadb
+# Web framework
 flask
 flask-cors
+gunicorn
+
+# MongoDB
+pymongo
+dnspython
+
+# AI APIs
+voyageai
+openai
+
+# Utilities
 python-dotenv
-sentence-transformers
-numpy
-requests
-anthropic

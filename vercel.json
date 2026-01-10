@@ -1,29 +1,14 @@
 {
-    "version": 2,
+    "buildCommand": "cd front_end && npm install && npm run build",
+    "outputDirectory": "front_end/dist",
     "rewrites": [
         {
-            "source": "/api/analyze",
-            "destination": "/api/analyze"
+            "source": "/api/(.*)",
+            "destination": "/api"
         },
         {
-            "source": "/api/history",
-            "destination": "/api/history"
-        },
-        {
-            "source": "/api/task",
-            "destination": "/api/task"
-        },
-        {
-            "source": "/api/override",
-            "destination": "/api/override"
-        },
-        {
-            "source": "/api/patterns",
-            "destination": "/api/patterns"
-        },
-        {
-            "source": "/api",
-            "destination": "/api/index"
+            "source": "/(.*)",
+            "destination": "/index.html"
         }
     ]
 }
