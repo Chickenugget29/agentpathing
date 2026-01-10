@@ -1,10 +1,24 @@
 # MPRG - Multi-Path Reasoning Guard
 
-A safety gate that validates agent reasoning robustness by detecting whether multiple **distinct** reasoning paths support a plan — not just surface-level agreement.
+A safety gate that validates agentic workflows by checking whether **multiple distinct reasoning families** support a plan or answer — not just surface-level agreement.
 
 ## 🔑 Core Concept
 
-Before an agent acts, MPRG checks whether there are **multiple different ways** to justify the plan — not just multiple agents saying the same thing.
+Before an agent acts, MPRG checks if there are **different reasoning paths** behind the output, not just multiple agents saying the same thing.
+
+## ✅ What This Build Includes
+
+- Parallel multi-agent runs (3–5 roles) with strict JSON ReasoningSummary outputs
+- Validation + retry (JSON-only on failure)
+- Reasoning family clustering with:
+  - plan embedding cosine similarity
+  - assumption overlap (Jaccard)
+- Robustness status:
+  - 1 family → FRAGILE
+  - 2+ families → ROBUST
+- MongoDB Atlas as system-of-record (tasks, runs, families)
+- Restart-safe clustering (resume from stored runs)
+- Minimal API + demo UI
 
 ## ⚡ Quick Start
 
@@ -17,13 +31,17 @@ pip install -r requirements.txt
 ### 2. Configure Environment
 
 ```bash
-# Copy and edit environment file
 cp .env.example .env
 
-# Add your API keys:
-# VOYAGE_API_KEY=your_voyage_key
-# OPENAI_API_KEY=your_openai_key (fallback)
-# MONGODB_URI=mongodb+srv://... (optional for persistence)
+# Required
+OPENAI_API_KEY=your_openai_key_here
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/mprg?retryWrites=true&w=majority
+
+# Optional overrides
+OPENAI_MODEL=gpt-4o-mini
+AGENT_COUNT=4
+PLAN_SIM_THRESHOLD=0.85
+ASSUMPTION_SIM_THRESHOLD=0.70
 ```
 
 ### 3. Run the Server
@@ -34,75 +52,84 @@ python server.py
 
 ### 4. Open Demo UI
 
-Open `web/index.html` in browser or visit http://localhost:5000
+Open `web/index.html` in your browser.
 
-## 🏗️ Architecture
+## 🧩 Reasoning Guard Generator (Standalone)
 
-```
-Task → Multi-Agent Runner (5 agents) → Responses
-         ↓
-┌─────────────────────────────────────────┐
-│ Layer 1: Symbolic FOL    │ Layer 2: Embeddings │
-│ translator.py            │ ChromaDB            │
-└─────────────────────────────────────────┘
-         ↓
-Dual-Layer Family Grouper → Reasoning Families
-         ↓
-Robustness Scorer → FRAGILE | MODERATE | ROBUST
-         ↓
-Execution Gate → BLOCK | WARN | ALLOW
+This module runs diverse agents and returns a JSON TaskBundle without touching MongoDB.
+
+```bash
+python generator_server.py
 ```
 
-## 📊 Scoring
+POST to `/generate`:
 
-| Families | Score | Action |
-|----------|-------|--------|
-| 1 | FRAGILE | 🛑 BLOCK |
-| 2 | MODERATE | ⚠️ WARN |
-| 3+ | ROBUST | ✅ ALLOW |
+```json
+{
+  "user_prompt": "Plan a 3-hour workflow to sync data across APIs."
+}
+```
 
-## 🗄️ MongoDB Atlas Use Case
+Response: `TaskBundle` with `runs[]` including strict `ReasoningSummary` JSON.
 
-MongoDB Atlas is the **reasoning state engine**:
+### Using Anthropic Instead of OpenAI
 
-1. **Durable Storage**: Persist all reasoning traces across sessions
-2. **Crash Recovery**: Reload agent state after failures
-3. **Historical Analysis**: Track fragile patterns over time
-4. **Demo Replay**: Show complete analysis history to judges
+Set the provider and key in `.env`:
+
+```
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your_anthropic_key_here
+ANTHROPIC_MODEL=claude-3-5-sonnet-20240620
+ANTHROPIC_API_BASE=https://api.anthropic.com
+```
+
+Install the SDK:
+
+```bash
+pip install anthropic
+```
+
+## 📡 API
+
+- `POST /tasks`
+  - Body: `{ "task": "Your task prompt" }`
+  - Response: `{ "task_id": "..." }`
+- `GET /tasks/:id`
+  - Task status + robustness metrics
+- `GET /tasks/:id/runs`
+  - Raw agent runs (ReasoningSummary + validity)
+- `GET /tasks/:id/families`
+  - Reasoning families + representative signatures
+
+## 🗄️ MongoDB Collections
+
+- `tasks`: task prompt, created_at, status, robustness metrics
+- `runs`: agent outputs + ReasoningSummary + embeddings + validity
+- `families`: clustering results + family signature + robustness metrics
 
 ## 📁 Project Structure
 
 ```
 agentpathing/
-├── translator.py    # FOL translator (existing)
-├── planner.py       # Planning agent (existing)
-├── main.py          # CLI (existing)
-├── server.py        # Flask API
-├── mprg/            # MPRG core
-│   ├── runner.py    # Multi-agent execution
-│   ├── analyzer.py  # Dual-layer analysis
-│   ├── grouper.py   # Family detection
-│   ├── scorer.py    # Robustness scoring
-│   ├── gate.py      # Execution gate
-│   ├── vectors.py   # ChromaDB embeddings
-│   ├── db.py        # MongoDB integration
-│   └── pipeline.py  # Main orchestration
+├── server.py             # Flask API
+├── mprg/
+│   ├── agent_runner.py   # Multi-agent LLM runner (JSON enforced)
+│   ├── models.py         # ReasoningSummary schema + validation
+│   ├── embeddings.py     # Plan embeddings + cosine similarity
+│   ├── cluster.py        # Family clustering logic
+│   ├── orchestrator.py   # End-to-end orchestration + resume
+│   └── store.py          # MongoDB persistence
 └── web/
-    └── index.html   # Demo UI
+    └── index.html        # Demo UI
 ```
 
-## 🎬 Demo Flow
+## 🧪 Demo Flow
 
-1. Enter task: "Plan a 3-hour workflow to sync data across APIs"
-2. Watch 5 agents generate plans
-3. See FOL translations of reasoning
-4. View reasoning families (clustered by similarity)
-5. Get robustness score: FRAGILE / MODERATE / ROBUST
-6. See gate decision: BLOCK / WARN / ALLOW
+1. Enter a task prompt in the UI
+2. Watch 3–5 agent runs execute in parallel
+3. MPRG clusters reasoning families
+4. See robustness status + answer agreement
 
-## 🏆 Why This Wins
+## 📜 License
 
-- **Impact**: Prevents costly agent failures
-- **Creativity**: Nobody else is doing multi-path reasoning validation
-- **MongoDB**: Deep integration for reasoning memory
-- **Visual**: Clear, intuitive demo
+MIT (or your preferred open-source license).
