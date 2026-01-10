@@ -1,11 +1,12 @@
-"""Get specific task analysis - MongoDB only."""
+"""Get specific task analysis - Flask format for Vercel."""
 
-import json
+from flask import Flask, request, jsonify
 import os
+
+app = Flask(__name__)
 
 
 def get_task_analysis(task_id):
-    """Get task analysis from MongoDB."""
     try:
         from pymongo import MongoClient
         from bson import ObjectId
@@ -51,41 +52,17 @@ def get_task_analysis(task_id):
         return None, str(e)
 
 
-def handler(request):
-    """Vercel Python serverless function handler."""
-    # Get task_id from query params
-    task_id = None
-    if hasattr(request, 'args'):
-        task_id = request.args.get('id')
+@app.route("/api/task", methods=["GET"])
+def handler():
+    task_id = request.args.get('id')
     
     if not task_id:
-        return {
-            "statusCode": 400,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({"error": "Missing 'id' query parameter"})
-        }
+        return jsonify({"error": "Missing 'id' query parameter"}), 400
     
     analysis, error = get_task_analysis(task_id)
     
     if analysis is None:
         status = 404 if error == "Task not found" else 503
-        return {
-            "statusCode": status,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({"error": error})
-        }
+        return jsonify({"error": error}), status
     
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-        },
-        "body": json.dumps(analysis)
-    }
+    return jsonify(analysis)

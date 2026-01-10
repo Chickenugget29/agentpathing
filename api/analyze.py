@@ -1,47 +1,25 @@
-"""Main MPRG analysis endpoint."""
+"""Main MPRG analysis endpoint - Flask format for Vercel."""
 
-import json
+from flask import Flask, request, jsonify
 import os
 import sys
 
+app = Flask(__name__)
 
-def handler(request):
-    """Vercel Python serverless function handler."""
-    # Handle CORS preflight
+
+@app.route("/api/analyze", methods=["POST", "OPTIONS"])
+def handler():
     if request.method == "OPTIONS":
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            },
-            "body": ""
-        }
+        response = jsonify({})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        return response
     
-    # Parse request body
-    try:
-        body = request.body
-        data = json.loads(body) if body else {}
-    except (json.JSONDecodeError, AttributeError):
-        return {
-            "statusCode": 400,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({"error": "Invalid JSON"})
-        }
+    data = request.get_json() or {}
     
     if "task" not in data:
-        return {
-            "statusCode": 400,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({"error": "Missing 'task' in request body"})
-        }
+        return jsonify({"error": "Missing 'task' in request body"}), 400
     
     try:
         # Add parent directory to path for imports
@@ -56,21 +34,6 @@ def handler(request):
         )
         
         result = pipeline.analyze(data["task"])
-        
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps(result_to_dict(result), default=str)
-        }
+        return jsonify(result_to_dict(result))
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({"error": str(e)})
-        }
+        return jsonify({"error": str(e)}), 500

@@ -1,11 +1,12 @@
-"""Get fragile patterns - MongoDB only."""
+"""Get fragile patterns - Flask format for Vercel."""
 
-import json
+from flask import Flask, jsonify
 import os
+
+app = Flask(__name__)
 
 
 def get_patterns():
-    """Get fragile patterns from MongoDB."""
     try:
         from pymongo import MongoClient
         
@@ -36,15 +37,7 @@ def get_patterns():
         return []
 
 
-def handler(request):
-    """Vercel Python serverless function handler."""
+@app.route("/api/patterns", methods=["GET"])
+def handler():
     patterns = get_patterns()
-    
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-        },
-        "body": json.dumps({"patterns": patterns})
-    }
+    return jsonify({"patterns": patterns})

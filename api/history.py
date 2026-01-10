@@ -1,11 +1,12 @@
-"""Get recent analysis history - MongoDB only."""
+"""Get recent analysis history - Flask format for Vercel."""
 
-import json
+from flask import Flask, request, jsonify
 import os
+
+app = Flask(__name__)
 
 
 def get_history(limit=10):
-    """Get recent analyses from MongoDB."""
     try:
         from pymongo import MongoClient
         
@@ -28,27 +29,14 @@ def get_history(limit=10):
         return [], str(e)
 
 
-def handler(request):
-    """Vercel Python serverless function handler."""
-    # Parse limit from query
-    limit = 10
-    if hasattr(request, 'args'):
-        limit = int(request.args.get('limit', 10))
-    
+@app.route("/api/history", methods=["GET"])
+def handler():
+    limit = request.args.get('limit', 10, type=int)
     analyses, error = get_history(limit)
     
     if analyses is None:
-        response = {"analyses": [], "note": error}
+        return jsonify({"analyses": [], "note": error})
     elif error:
-        response = {"analyses": analyses, "error": error}
+        return jsonify({"analyses": analyses, "error": error})
     else:
-        response = {"analyses": analyses}
-    
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-        },
-        "body": json.dumps(response)
-    }
+        return jsonify({"analyses": analyses})

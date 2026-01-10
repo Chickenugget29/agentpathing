@@ -1,57 +1,28 @@
-"""Override gate decision - lightweight endpoint."""
+"""Override gate decision - Flask format for Vercel."""
 
-import json
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
 
 
-def handler(request):
-    """Vercel Python serverless function handler."""
-    # Handle CORS preflight
+@app.route("/api/override", methods=["POST", "OPTIONS"])
+def handler():
     if request.method == "OPTIONS":
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            },
-            "body": ""
-        }
+        response = jsonify({})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        return response
     
-    # Parse request body
-    try:
-        body = request.body
-        data = json.loads(body) if body else {}
-    except (json.JSONDecodeError, AttributeError):
-        return {
-            "statusCode": 400,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({"error": "Invalid JSON"})
-        }
+    data = request.get_json() or {}
     
     if "task_id" not in data or "confirmation" not in data:
-        return {
-            "statusCode": 400,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
-            "body": json.dumps({
-                "error": "Missing 'task_id' or 'confirmation' in request"
-            })
-        }
+        return jsonify({
+            "error": "Missing 'task_id' or 'confirmation' in request"
+        }), 400
     
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-        },
-        "body": json.dumps({
-            "status": "override_accepted",
-            "task_id": data["task_id"],
-            "message": "Gate decision overridden. Proceed with caution."
-        })
-    }
+    return jsonify({
+        "status": "override_accepted",
+        "task_id": data["task_id"],
+        "message": "Gate decision overridden. Proceed with caution."
+    })

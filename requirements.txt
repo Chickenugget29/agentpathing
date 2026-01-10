@@ -1,13 +1,16 @@
 # MPRG - Multi-Path Reasoning Guard
+# Optimized for Vercel serverless deployment
 
+# Web framework
+flask
+
+# MongoDB
 pymongo
 dnspython
+
+# AI APIs
 voyageai
-chromadb
-flask
-flask-cors
+openai
+
+# Utilities
 python-dotenv
-sentence-transformers
-numpy
-requests
-anthropic
