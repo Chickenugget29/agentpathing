@@ -1,31 +1,51 @@
-export interface FamilyRecord {
-  family_id: string;
-  rep_run_id: string;
-  run_ids: string[];
+export type AgentId = 'A' | 'B' | 'C' | 'D' | 'E' | string;
+
+export type TrustLevel = 'Fragile' | 'Uncertain' | 'Robust';
+
+export interface ReasoningStep {
+    id: number;
+    text: string;
+    isShared?: boolean;
 }
 
-export interface TaskRecord {
-  _id: string;
-  input_text?: string;
-  status?: string;
-  robustness_status?: string;
-  num_families?: number;
-  analysis_error?: string | null;
-  families?: FamilyRecord[];
+export interface AgentData {
+    id: AgentId;
+    name: string;
+    finalAnswer: string;
+    reasoning: ReasoningStep[];
+    assumptions: string[];
+    folTranslation?: string;
 }
 
-export interface RunRecord {
-  _id?: string;
-  agent_role?: string;
-  final_answer?: string;
-  plan_steps?: string[];
-  assumptions?: string[];
-  is_valid?: boolean;
-  raw_json?: Record<string, unknown>;
-  created_at?: string;
+export interface GateDecisionInfo {
+    decision: string;
+    reason: string;
+    action: string;
+    suggestion?: string | null;
+    color: string;
+    icon: string;
 }
 
-export interface TaskPayload {
-  task: TaskRecord;
-  runs: RunRecord[];
+export interface RobustnessOverview {
+    totalAgents: number;
+    distinctFamilies: number;
+    confidence: string;
+    explanation?: string;
+    recommendation?: string;
+}
+
+export interface AnalysisResult {
+    taskId?: string;
+    summary?: string;
+    trustLevel: TrustLevel;
+    trustDescription: string;
+    agents: AgentData[];
+    gateDecision?: GateDecisionInfo;
+    robustness?: RobustnessOverview;
+    error?: string;
+}
+
+export interface Scenario extends AnalysisResult {
+    id: 'fragile' | 'robust';
+    label: string;
 }
