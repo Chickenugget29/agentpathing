@@ -9,8 +9,5 @@ dnspython
 voyageai
 openai
 
-# Vector embeddings (uses built-in embedding function)
-chromadb
-
 # Utilities
 python-dotenv
