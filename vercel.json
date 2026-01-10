@@ -1,46 +1,8 @@
 {
     "version": 2,
-    "builds": [
-        {
-            "src": "api/*.py",
-            "use": "@vercel/python",
-            "config": {
-                "runtime": "python3.9"
-            }
-        },
-        {
-            "src": "web/**",
-            "use": "@vercel/static"
+    "functions": {
+        "api/*.py": {
+            "runtime": "python3.9"
         }
-    ],
-    "routes": [
-        {
-            "src": "/api/analyze",
-            "dest": "/api/analyze.py"
-        },
-        {
-            "src": "/api/history",
-            "dest": "/api/history.py"
-        },
-        {
-            "src": "/api/task",
-            "dest": "/api/task.py"
-        },
-        {
-            "src": "/api/override",
-            "dest": "/api/override.py"
-        },
-        {
-            "src": "/api/patterns",
-            "dest": "/api/patterns.py"
-        },
-        {
-            "src": "/api/?$",
-            "dest": "/api/index.py"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/web/$1"
-        }
-    ]
+    }
 }
