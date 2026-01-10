@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AgentData } from '../data';
+import { AgentData } from '../types';
 import { ChevronDown, ChevronRight, GitMerge } from 'lucide-react';
 
 interface AgentPanelProps {

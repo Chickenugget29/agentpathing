@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -16,6 +17,9 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+FRONTEND_DIST = Path(__file__).resolve().parent / "front_end" / "dist"
+FRONTEND_DIST_STR = str(FRONTEND_DIST)
 
 generator = ReasoningGuardGenerator(
     provider=os.getenv("LLM_PROVIDER", "openai"),
@@ -42,11 +46,6 @@ def generate():
         return jsonify(bundle)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
-
-
-@app.route("/", methods=["GET"])
-def home():
-    return send_from_directory("public", "index.html")
 
 
 @app.route("/tasks", methods=["POST"])
@@ -125,6 +124,23 @@ def list_tasks():
         return jsonify({"tasks": tasks})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path: str):
+    """Serve the main React UI when running this Flask server locally."""
+    index_file = FRONTEND_DIST / "index.html"
+    if not index_file.exists():
+        return jsonify({
+            "error": "Frontend build not found",
+            "hint": "Run 'npm install && npm run build' inside front_end/ to produce the dist bundle."
+        }), 503
+
+    asset = FRONTEND_DIST / path if path else index_file
+    if path and asset.is_file():
+        return send_from_directory(FRONTEND_DIST_STR, path)
+    return send_from_directory(FRONTEND_DIST_STR, "index.html")
 
 
 if __name__ == "__main__":

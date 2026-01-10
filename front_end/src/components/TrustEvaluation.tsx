@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Scenario } from '../data';
+import { Scenario } from '../types';
 import { ShieldAlert, ShieldCheck, HelpCircle } from 'lucide-react';
 
 interface TrustEvaluationProps {

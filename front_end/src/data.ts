@@ -1,26 +1,4 @@
-export type AgentId = 'A' | 'B' | 'C';
-
-export interface ReasoningStep {
-  id: number;
-  text: string;
-  isShared?: boolean; // Highlight if shared across agents
-}
-
-export interface AgentData {
-  id: AgentId;
-  name: string;
-  finalAnswer: string;
-  reasoning: ReasoningStep[];
-  assumptions: string[];
-}
-
-export interface Scenario {
-  id: 'fragile' | 'robust';
-  label: string;
-  trustLevel: 'Fragile' | 'Uncertain' | 'Robust';
-  trustDescription: string;
-  agents: AgentData[];
-}
+import type { Scenario, AgentData, ReasoningStep } from './types';
 
 const COMMON_QUESTION = "How many piano tuners are there in Chicago?";
 
