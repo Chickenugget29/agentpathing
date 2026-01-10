@@ -1,0 +1,29 @@
+{
+    "version": 2,
+    "rewrites": [
+        {
+            "source": "/api/analyze",
+            "destination": "/api/analyze"
+        },
+        {
+            "source": "/api/history",
+            "destination": "/api/history"
+        },
+        {
+            "source": "/api/task",
+            "destination": "/api/task"
+        },
+        {
+            "source": "/api/override",
+            "destination": "/api/override"
+        },
+        {
+            "source": "/api/patterns",
+            "destination": "/api/patterns"
+        },
+        {
+            "source": "/api",
+            "destination": "/api/index"
+        }
+    ]
+}

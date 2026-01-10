@@ -6,9 +6,9 @@ from translator import translate
 
 
 INTRO = """\
-Atlas RAG → FOL translator
-Type natural-language requests (e.g., "What is our remote work policy?")
-and receive strict first-order logic templates. Blank line or 'exit' quits.
+Chain-of-Thought → FOL translator
+Paste multi-step reasoning (numbered sections, colon steps, bullets)
+and receive structured first-order logic facts. Blank line or 'exit' quits.
 """
 
 

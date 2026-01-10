@@ -1,0 +1,38 @@
+# Vercel ignore file - exclude heavy/unnecessary files
+
+# Virtual environment (HUGE - this was causing 4GB issue)
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Local config
+.env
+.env.local
+
+# Tests
+test_*.py
+*_test.py
+
+# Documentation
+*.md
+!README.md
+
+# Local development
+*.log
+*.sqlite
+*.db
