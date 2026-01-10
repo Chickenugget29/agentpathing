@@ -46,6 +46,24 @@ class TaskStore:
         updates["updated_at"] = datetime.now(timezone.utc)
         self.tasks.update_one({"_id": ObjectId(task_id)}, {"$set": updates})
 
+    def update_task_analysis(
+        self,
+        task_id: str,
+        families: List[Dict[str, Any]],
+        num_families: int,
+        robustness_status: str,
+        analysis_error: Optional[str] = None,
+    ) -> None:
+        self.update_task(
+            task_id,
+            {
+                "families": families,
+                "num_families": num_families,
+                "robustness_status": robustness_status,
+                "analysis_error": analysis_error,
+            },
+        )
+
     def insert_run(self, task_id: str, run_doc: Dict[str, Any]) -> str:
         doc = {**run_doc, "task_id": task_id, "created_at": datetime.now(timezone.utc)}
         result = self.runs.insert_one(doc)

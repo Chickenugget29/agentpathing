@@ -127,6 +127,16 @@
             color: var(--accent-bad);
         }
 
+        .status-insufficient {
+            background: rgba(148, 163, 184, 0.2);
+            color: var(--muted);
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-bad);
+        }
+
         .family-card {
             background: var(--card);
             border: 1px solid var(--border);
@@ -187,6 +197,7 @@
                     <strong id="answers-agree">-</strong>
                 </div>
             </div>
+            <div id="analysis-error" class="muted"></div>
 
             <div id="families-list"></div>
         </div>
@@ -228,40 +239,109 @@
             const runs = payload.runs || [];
 
             document.getElementById("results").style.display = "block";
+            renderSummary(task, runs);
+            renderFamilies(task, runs);
+        }
+
+        function renderSummary(task, runs) {
             const validRuns = runs.filter((run) => run.is_valid).length;
             document.getElementById("agents-count").textContent = `${validRuns} / ${runs.length}`;
             document.getElementById("families-count").textContent = task.num_families ?? "-";
             document.getElementById("robustness-status").textContent = task.robustness_status || "-";
             document.getElementById("answers-agree").textContent = "-";
 
-            renderRuns(runs);
+            const badge = document.getElementById("robustness-status");
+            const status = (task.robustness_status || "").toUpperCase();
+            badge.className = "";
+            if (status === "ROBUST") badge.classList.add("status-pill", "status-robust");
+            else if (status === "FRAGILE") badge.classList.add("status-pill", "status-fragile");
+            else if (status === "INSUFFICIENT_DATA") badge.classList.add("status-pill", "status-insufficient");
+            else if (status === "ERROR") badge.classList.add("status-pill", "status-error");
+
+            const errorEl = document.getElementById("analysis-error");
+            if (task.analysis_error) {
+                errorEl.textContent = `Analysis error: ${task.analysis_error}`;
+            } else {
+                errorEl.textContent = "";
+            }
         }
 
-        function renderRuns(runs) {
+        function renderFamilies(task, runs) {
             const list = document.getElementById("families-list");
             if (!runs.length) {
                 list.innerHTML = "<p class='muted'>No runs yet.</p>";
                 return;
             }
 
-            list.innerHTML = runs.map((run, index) => {
-                const steps = run.plan_steps || [];
-                const assumptions = run.assumptions || [];
-                const statusClass = run.is_valid ? "status-robust" : "status-fragile";
-                const statusLabel = run.is_valid ? "VALID" : "INVALID";
+            if (!task.families || !task.families.length) {
+                list.innerHTML = runs.map((run, index) => renderRunCard(run, index + 1, true)).join("");
+                return;
+            }
+
+            const runMap = {};
+            runs.forEach((run) => {
+                runMap[run._id] = run;
+            });
+            const assigned = new Set();
+
+            list.innerHTML = task.families.map((family, idx) => {
+                const rep = runMap[family.rep_run_id];
+                const members = (family.run_ids || []).map((id) => runMap[id]).filter(Boolean);
+                members.forEach((run) => assigned.add(run._id));
+                const repCard = rep ? renderRunCard(rep, 1, true, "Representative") : "<p class='muted'>Missing representative.</p>";
+                const otherCards = members
+                    .filter((run) => !rep || run._id !== rep._id)
+                    .map((run, i) => renderRunCard(run, i + 2, false))
+                    .join("");
                 return `
                     <div class="family-card">
-                        <h4>Run ${index + 1} (${escapeHtml(run.agent_role || "agent")})
-                            <span class="status-pill ${statusClass}">${statusLabel}</span>
-                        </h4>
-                        <div class="muted">Final answer: ${escapeHtml(run.final_answer || "-")}</div>
-                        <p><strong>Plan Steps</strong></p>
-                        <div>${steps.map(step => `<span class="tag">${escapeHtml(step)}</span>`).join("") || "<span class='muted'>None</span>"}</div>
-                        <p><strong>Assumptions</strong></p>
-                        <div>${assumptions.map(item => `<span class="tag">${escapeHtml(item)}</span>`).join("") || "<span class='muted'>None</span>"}</div>
+                        <h4>Family ${idx + 1} (${members.length} runs)</h4>
+                        ${repCard}
+                        ${otherCards || "<p class='muted'>No additional runs.</p>"}
                     </div>
                 `;
             }).join("");
+
+            const unassigned = runs.filter((run) => !assigned.has(run._id));
+            if (unassigned.length) {
+                list.innerHTML += `
+                    <div class="family-card">
+                        <h4>Unassigned (${unassigned.length} runs)</h4>
+                        ${unassigned.map((run, i) => renderRunCard(run, i + 1, false)).join("")}
+                    </div>
+                `;
+            }
+        }
+
+        function renderRunCard(run, index, expanded, label) {
+            const steps = run.plan_steps || [];
+            const assumptions = run.assumptions || [];
+            const statusClass = run.is_valid ? "status-robust" : "status-fragile";
+            const statusLabel = run.is_valid ? "VALID" : "INVALID";
+            const header = `${escapeHtml(run.agent_role || "agent")} ${label ? `(${label})` : ""}`;
+            const body = `
+                <div class="muted">Final answer: ${escapeHtml(run.final_answer || "-")}</div>
+                <p><strong>Plan Steps</strong></p>
+                <div>${steps.map(step => `<span class="tag">${escapeHtml(step)}</span>`).join("") || "<span class='muted'>None</span>"}</div>
+                <p><strong>Assumptions</strong></p>
+                <div>${assumptions.map(item => `<span class="tag">${escapeHtml(item)}</span>`).join("") || "<span class='muted'>None</span>"}</div>
+            `;
+            if (expanded) {
+                return `
+                    <div>
+                        <h4>Run ${index} (${header})
+                            <span class="status-pill ${statusClass}">${statusLabel}</span>
+                        </h4>
+                        ${body}
+                    </div>
+                `;
+            }
+            return `
+                <details>
+                    <summary>Run ${index} (${header}) <span class="status-pill ${statusClass}">${statusLabel}</span></summary>
+                    ${body}
+                </details>
+            `;
         }
 
         function escapeHtml(text) {

@@ -61,6 +61,66 @@ AGENT_ROLES = [
         "role": "alternative_strategy",
         "constraint": "Avoid batching and offer a different approach.",
     },
+    {
+        "role": "security_focus",
+        "constraint": "Prioritize security, least privilege, and data protection.",
+    },
+    {
+        "role": "compliance_guard",
+        "constraint": "Assume strict compliance requirements and auditability.",
+    },
+    {
+        "role": "performance_engineer",
+        "constraint": "Optimize for latency and throughput under load.",
+    },
+    {
+        "role": "data_quality",
+        "constraint": "Prioritize validation, deduplication, and correctness checks.",
+    },
+    {
+        "role": "observability",
+        "constraint": "Maximize logging, tracing, and alerting for visibility.",
+    },
+    {
+        "role": "resilience_tester",
+        "constraint": "Design for chaos testing and graceful degradation.",
+    },
+    {
+        "role": "integration_architect",
+        "constraint": "Emphasize integration contracts and schema versioning.",
+    },
+    {
+        "role": "minimalist",
+        "constraint": "Reduce steps and dependencies to the smallest viable plan.",
+    },
+    {
+        "role": "batching_critic",
+        "constraint": "Avoid batching; prefer incremental or streaming sync.",
+    },
+    {
+        "role": "human_in_loop",
+        "constraint": "Include manual checkpoints and approvals where risky.",
+    },
+    {
+        "role": "rollback_specialist",
+        "constraint": "Plan explicit rollback and recovery procedures.",
+    },
+    {
+        "role": "scalability",
+        "constraint": "Assume rapid growth; design for horizontal scaling.",
+    },
+    {
+        "role": "edge_case_hunter",
+        "constraint": "Focus on rare edge cases and failure modes.",
+    },
+    {
+        "role": "timeboxer",
+        "constraint": "Keep the workflow within strict time constraints.",
+    },
+    {
+        "role": "api_rate_limiter",
+        "constraint": "Optimize for rate limits and backoff strategies.",
+    },
 ]
 
 
@@ -196,7 +256,7 @@ class ReasoningGuardGenerator:
             base_url = base_url[:-3]
         self.anthropic_base_url = base_url
         self._anthropic = self._try_init_anthropic()
-        self.num_agents = max(3, min(num_agents, 5))
+        self.num_agents = max(3, min(num_agents, len(AGENT_ROLES)))
         self.enable_embeddings = enable_embeddings
         self.voyage_key = voyage_key or os.getenv("VOYAGE_API_KEY")
 

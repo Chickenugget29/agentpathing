@@ -9,6 +9,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 from mprg.generator import ReasoningGuardGenerator
+from mprg.task_analysis import compute_families_and_robustness
 from mprg.task_store import TaskStore
 
 
@@ -73,6 +74,7 @@ def create_task():
                     "raw_json": run,
                 },
             )
+        _analyze_task(task_id)
         store.update_task(task_id, {"status": "DONE"})
         return jsonify({"task_id": task_id})
     except Exception as exc:
@@ -125,6 +127,53 @@ def list_tasks():
         return jsonify({"tasks": tasks})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+def _analyze_task(task_id: str) -> None:
+    runs = store.get_runs(task_id)
+    try:
+        families, robustness, analysis_error, metrics = compute_families_and_robustness(
+            runs
+        )
+        family_payload = [
+            {
+                "family_id": family.family_id,
+                "rep_run_id": family.rep_run_id,
+                "run_ids": family.run_ids,
+            }
+            for family in families
+        ]
+        store.update_task_analysis(
+            task_id,
+            families=family_payload,
+            num_families=metrics.get("num_families", len(family_payload)),
+            robustness_status=robustness,
+            analysis_error=analysis_error,
+        )
+        if robustness == "INSUFFICIENT_DATA":
+            store.update_task(task_id, {"robustness_status": "INSUFFICIENT_DATA"})
+        valid_runs = metrics.get("valid_runs", 0)
+        mode_counts = metrics.get("mode_counts", {})
+        print(
+            "[analysis]",
+            "valid_runs=",
+            valid_runs,
+            "mode_counts=",
+            mode_counts,
+            "num_families=",
+            len(family_payload),
+            "robustness=",
+            robustness,
+        )
+    except Exception as exc:
+        store.update_task_analysis(
+            task_id,
+            families=[],
+            num_families=0,
+            robustness_status="ERROR",
+            analysis_error=str(exc),
+        )
+        print("[analysis] error:", exc)
 
 
 if __name__ == "__main__":
