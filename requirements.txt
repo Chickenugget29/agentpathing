@@ -1,5 +1,5 @@
 # MPRG - Multi-Path Reasoning Guard
-# Render deployment
+# Vercel deployment
 
 # Web framework
 flask
@@ -13,6 +13,7 @@ dnspython
 # AI APIs
 voyageai
 openai
+anthropic
 
 # Utilities
 python-dotenv
