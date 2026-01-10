@@ -1,11 +1,16 @@
 # MPRG - Multi-Path Reasoning Guard
+# Optimized for Vercel serverless deployment
 
+# MongoDB
 pymongo
 dnspython
+
+# AI APIs
 voyageai
+openai
+
+# Vector embeddings (uses built-in embedding function)
 chromadb
-flask
-flask-cors
+
+# Utilities
 python-dotenv
-sentence-transformers
-numpy
