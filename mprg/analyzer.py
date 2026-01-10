@@ -140,37 +140,131 @@ class ReasoningAnalyzer:
     # =========================================================================
     
     def _translate_to_fol(self, text: str) -> str:
-        """Translate text to first-order logic using translator.py.
+        """Create structural FOL representation of reasoning.
         
-        The translator handles:
-        - Policy queries
-        - Conditional logic
-        - Quantified statements
-        - Entity references
+        Instead of using the generic chain translator, we extract:
+        - Actions (verbs)
+        - Objects (nouns)  
+        - Conditions (if/when clauses)
+        - Sequence (before/after/then)
+        
+        This creates FOL that can be meaningfully compared.
         """
-        # Try direct translation
-        fol = fol_translate(text)
-        if fol:
-            return fol
-            
-        # If no match, try sentence by sentence
-        sentences = re.split(r'[.!?]+', text)
-        fol_parts = []
+        predicates = []
         
-        for sentence in sentences:
-            sentence = sentence.strip()
-            if not sentence:
-                continue
-                
-            result = fol_translate(sentence)
-            if result:
-                fol_parts.append(result)
-                
-        if fol_parts:
-            return " & ".join(fol_parts)
-            
-        # Fallback: create basic topic-based FOL
+        # Extract action-object pairs
+        actions = self._extract_actions(text)
+        for action, obj in actions:
+            predicates.append(f"Action({action}, {obj})")
+        
+        # Extract conditions
+        conditions = self._extract_conditions(text)
+        for cond, result in conditions:
+            predicates.append(f"Implies({cond}, {result})")
+        
+        # Extract sequence relationships
+        sequences = self._extract_sequences(text)
+        for first, second in sequences:
+            predicates.append(f"Before({first}, {second})")
+        
+        # Extract method/approach
+        methods = self._extract_methods(text)
+        for method in methods:
+            predicates.append(f"Method({method})")
+        
+        if predicates:
+            return " & ".join(predicates)
+        
+        # Fallback
         return self._create_fallback_fol(text)
+    
+    def _extract_actions(self, text: str) -> List[Tuple[str, str]]:
+        """Extract action-object pairs from text."""
+        patterns = [
+            r'\b(fetch|get|retrieve|load|read)\s+(?:the\s+)?(\w+)',
+            r'\b(store|save|write|persist|cache)\s+(?:the\s+)?(\w+)',
+            r'\b(transform|convert|process|parse|format)\s+(?:the\s+)?(\w+)',
+            r'\b(validate|verify|check|test|ensure)\s+(?:the\s+)?(\w+)',
+            r'\b(send|transmit|post|push)\s+(?:the\s+)?(\w+)',
+            r'\b(create|generate|build|construct)\s+(?:the\s+)?(\w+)',
+            r'\b(delete|remove|clear|purge)\s+(?:the\s+)?(\w+)',
+            r'\b(update|modify|change|edit)\s+(?:the\s+)?(\w+)',
+            r'\b(connect|link|join|merge)\s+(?:the\s+)?(\w+)',
+            r'\b(authenticate|authorize|login)\s+(?:to\s+)?(\w+)',
+        ]
+        
+        actions = []
+        text_lower = text.lower()
+        for pattern in patterns:
+            matches = re.findall(pattern, text_lower)
+            for verb, noun in matches:
+                actions.append((verb.capitalize(), noun.capitalize()))
+        
+        return actions[:5]
+    
+    def _extract_conditions(self, text: str) -> List[Tuple[str, str]]:
+        """Extract if-then conditions."""
+        patterns = [
+            r'if\s+([^,]+),\s*(?:then\s+)?([^.]+)',
+            r'when\s+([^,]+),\s*([^.]+)',
+            r'once\s+([^,]+),\s*([^.]+)',
+        ]
+        
+        conditions = []
+        text_lower = text.lower()
+        for pattern in patterns:
+            matches = re.findall(pattern, text_lower)
+            for cond, result in matches:
+                cond_const = self._to_constant(cond)
+                result_const = self._to_constant(result)
+                conditions.append((cond_const, result_const))
+        
+        return conditions[:3]
+    
+    def _extract_sequences(self, text: str) -> List[Tuple[str, str]]:
+        """Extract sequential relationships."""
+        patterns = [
+            r'first\s+([^,]+),?\s*then\s+([^.]+)',
+            r'after\s+([^,]+),?\s*([^.]+)',
+            r'before\s+([^,]+),?\s*([^.]+)',
+            r'([^.]+)\s+followed by\s+([^.]+)',
+        ]
+        
+        sequences = []
+        text_lower = text.lower()
+        for pattern in patterns:
+            matches = re.findall(pattern, text_lower)
+            for first, second in matches:
+                first_const = self._to_constant(first)
+                second_const = self._to_constant(second)
+                sequences.append((first_const, second_const))
+        
+        return sequences[:3]
+    
+    def _extract_methods(self, text: str) -> List[str]:
+        """Extract methodology/approach mentions."""
+        patterns = [
+            r'using\s+(?:a\s+)?(\w+(?:\s+\w+)?)\s+(?:approach|method|pattern|strategy)',
+            r'(?:approach|method|pattern|strategy)\s+(?:is|:)\s+(\w+(?:\s+\w+)?)',
+            r'via\s+(\w+(?:\s+\w+)?)',
+            r'through\s+(\w+(?:\s+\w+)?)',
+            r'\b(batch|stream|parallel|sequential|async|sync)\s+processing',
+            r'\b(polling|webhook|push|pull)\s+(?:model|pattern)?',
+        ]
+        
+        methods = []
+        text_lower = text.lower()
+        for pattern in patterns:
+            matches = re.findall(pattern, text_lower)
+            for match in matches:
+                methods.append(self._to_constant(match))
+        
+        return methods[:3]
+    
+    def _to_constant(self, text: str) -> str:
+        """Convert text to FOL constant."""
+        words = re.findall(r'[a-zA-Z]+', text)
+        return ''.join(w.capitalize() for w in words[:3]) or 'Unknown'
     
     def _create_fallback_fol(self, text: str) -> str:
         """Create fallback FOL for text that doesn't match rules."""
@@ -182,10 +276,10 @@ class ReasoningAnalyzer:
         topics = [w.capitalize() for w in words[:3]]
         
         if topics:
-            predicates = [f"Topic(d, {t})" for t in topics]
-            return f"exists d (Document(d) & {' & '.join(predicates)})"
+            predicates = [f"Topic({t})" for t in topics]
+            return " & ".join(predicates)
         
-        return "exists d (Document(d) & GeneralReasoning(d))"
+        return "GeneralReasoning()"
     
     def _extract_predicates(self, fol: str) -> List[str]:
         """Extract predicates from FOL string."""
