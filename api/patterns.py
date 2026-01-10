@@ -1,12 +1,11 @@
-"""Get fragile patterns - MongoDB only, no heavy ML deps."""
+"""Get fragile patterns - MongoDB only."""
 
-from http.server import BaseHTTPRequestHandler
 import json
 import os
 
 
 def get_patterns():
-    """Lazy import and query."""
+    """Get fragile patterns from MongoDB."""
     try:
         from pymongo import MongoClient
         
@@ -29,7 +28,6 @@ def get_patterns():
         ]
         
         results = list(collection.aggregate(pipeline))
-        # Serialize datetime
         for r in results:
             if "last_seen" in r and hasattr(r["last_seen"], "isoformat"):
                 r["last_seen"] = r["last_seen"].isoformat()
@@ -38,15 +36,15 @@ def get_patterns():
         return []
 
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-        
-        patterns = get_patterns()
-        response = {"patterns": patterns}
-        
-        self.wfile.write(json.dumps(response).encode())
-        return
+def handler(request):
+    """Vercel Python serverless function handler."""
+    patterns = get_patterns()
+    
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({"patterns": patterns})
+    }
