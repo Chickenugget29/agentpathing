@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -42,6 +42,11 @@ def generate():
         return jsonify(bundle)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return send_from_directory("public", "index.html")
 
 
 @app.route("/tasks", methods=["POST"])
