@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { FRAGILE_SCENARIO, ROBUST_SCENARIO, Scenario, AgentData } from './data';
-import { generateAnalysis, AnalysisResult } from './api';
+import { FRAGILE_SCENARIO, ROBUST_SCENARIO } from './data';
+import { generateAnalysis } from './api';
+import type { Scenario, AnalysisResult } from './types';
 import { TopBar } from './components/TopBar';
 import { PromptInput } from './components/PromptInput';
 import { AgentPanel } from './components/AgentPanel';
@@ -21,12 +22,7 @@ function App() {
         ? {
             id: 'robust', // Use robust styling for live results
             label: 'Live Analysis',
-            trustLevel: liveResult.trustLevel,
-            trustDescription: liveResult.trustDescription,
-            agents: liveResult.agents.map(a => ({
-                ...a,
-                id: a.id as 'A' | 'B' | 'C',
-            })),
+            ...liveResult,
         }
         : scenarioId === 'fragile' ? FRAGILE_SCENARIO : ROBUST_SCENARIO;
 

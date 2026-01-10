@@ -55,14 +55,16 @@ class MPRGPipeline:
         self,
         voyage_key: Optional[str] = None,
         openai_key: Optional[str] = None,
+        anthropic_key: Optional[str] = None,
         mongodb_uri: Optional[str] = None,
         num_agents: int = 5
     ):
         """Initialize pipeline.
         
         Args:
-            voyage_key: Voyage AI API key
-            openai_key: OpenAI API key (fallback)
+            voyage_key: Voyage AI API key (unused until Voyage offers chat)
+            openai_key: OpenAI API key
+            anthropic_key: Anthropic API key
             mongodb_uri: MongoDB Atlas connection string
             num_agents: Number of parallel agents
         """
@@ -71,6 +73,7 @@ class MPRGPipeline:
         self.runner = MultiAgentRunner(
             voyage_key=voyage_key,
             openai_key=openai_key,
+            anthropic_key=anthropic_key,
             num_agents=num_agents
         )
         self.analyzer = ReasoningAnalyzer(vector_store=self.vectors)
