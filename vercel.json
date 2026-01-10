@@ -3,7 +3,10 @@
     "builds": [
         {
             "src": "api/*.py",
-            "use": "@vercel/python"
+            "use": "@vercel/python",
+            "config": {
+                "runtime": "python3.9"
+            }
         },
         {
             "src": "web/**",
@@ -39,10 +42,5 @@
             "src": "/(.*)",
             "dest": "/web/$1"
         }
-    ],
-    "functions": {
-        "api/*.py": {
-            "runtime": "python3.9"
-        }
-    }
+    ]
 }
