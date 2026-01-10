@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import Iterable, List, Optional
 
 import requests
-import voyageai
 
 
 VOYAGE_DEFAULT_MODEL = "voyage-code-2"
 OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+VOYAGE_CHAT_URL = "https://api.voyageai.com/v1/chat/completions"
 
 
 @dataclass(frozen=True)
@@ -53,14 +53,14 @@ class PlanningClient:
             self.provider = "openai"
             self._openai_key = openai_key
             self._openai_model = openai_model
-            self._voyage_client = None
+            self._voyage_key = None
             self._voyage_model = None
         elif voyage_key:
             self.provider = "voyage"
             self._openai_key = None
             self._openai_model = None
+            self._voyage_key = voyage_key
             self._voyage_model = voyage_model
-            self._voyage_client = voyageai.Client(api_key=voyage_key)
         else:
             raise ValueError("Set OPENAI_API_KEY or VOYAGE_API_KEY before running the planner.")
 
@@ -90,21 +90,16 @@ class PlanningClient:
         }
 
     def _call_voyage(self, payload: dict) -> str:
-        assert self._voyage_client is not None and self._voyage_model
-        response = self._voyage_client.chat.completions.create(
-            model=self._voyage_model,
-            messages=payload["messages"],
-            temperature=payload.get("temperature", 0.1),
-        )
-        choice = response.choices[0]
-        message = getattr(choice, "message", None)
-        if isinstance(message, dict):
-            content = message.get("content", "")
-        else:
-            content = getattr(message, "content", "")
-        if not content:
-            content = getattr(choice, "text", "")
-        return (content or "").strip()
+        assert self._voyage_key and self._voyage_model
+        headers = {
+            "Authorization": f"Bearer {self._voyage_key}",
+            "Content-Type": "application/json",
+        }
+        body = {"model": self._voyage_model, **payload}
+        response = requests.post(VOYAGE_CHAT_URL, headers=headers, json=body, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"].strip()
 
     def _call_openai(self, payload: dict) -> str:
         headers = {
