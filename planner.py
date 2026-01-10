@@ -15,7 +15,6 @@ from typing import Iterable, List, Optional
 
 import requests
 import voyageai
-from voyageai.api_resources.api_requestor import APIRequestor
 
 
 VOYAGE_DEFAULT_MODEL = "voyage-code-2"
@@ -54,14 +53,14 @@ class PlanningClient:
             self.provider = "openai"
             self._openai_key = openai_key
             self._openai_model = openai_model
-            self._requestor: Optional[APIRequestor] = None
+            self._voyage_client = None
             self._voyage_model = None
         elif voyage_key:
             self.provider = "voyage"
             self._openai_key = None
             self._openai_model = None
             self._voyage_model = voyage_model
-            self._requestor = APIRequestor(key=voyage_key)
+            self._voyage_client = voyageai.Client(api_key=voyage_key)
         else:
             raise ValueError("Set OPENAI_API_KEY or VOYAGE_API_KEY before running the planner.")
 
@@ -91,10 +90,21 @@ class PlanningClient:
         }
 
     def _call_voyage(self, payload: dict) -> str:
-        assert self._requestor is not None and self._voyage_model
-        body = {"model": self._voyage_model, **payload}
-        response = self._requestor.request("post", "/responses", params=body)
-        return response["choices"][0]["message"]["content"].strip()
+        assert self._voyage_client is not None and self._voyage_model
+        response = self._voyage_client.chat.completions.create(
+            model=self._voyage_model,
+            messages=payload["messages"],
+            temperature=payload.get("temperature", 0.1),
+        )
+        choice = response.choices[0]
+        message = getattr(choice, "message", None)
+        if isinstance(message, dict):
+            content = message.get("content", "")
+        else:
+            content = getattr(message, "content", "")
+        if not content:
+            content = getattr(choice, "text", "")
+        return (content or "").strip()
 
     def _call_openai(self, payload: dict) -> str:
         headers = {
