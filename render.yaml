@@ -1,0 +1,16 @@
+# See https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: mprg-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: MONGODB_URI
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

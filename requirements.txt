@@ -1,8 +1,10 @@
 # MPRG - Multi-Path Reasoning Guard
-# Optimized for Vercel serverless deployment
+# Render deployment
 
 # Web framework
 flask
+flask-cors
+gunicorn
 
 # MongoDB
 pymongo
