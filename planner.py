@@ -18,7 +18,10 @@ import requests
 
 VOYAGE_DEFAULT_MODEL = "voyage-code-2"
 OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+ANTHROPIC_DEFAULT_MODEL = "claude-3-5-sonnet-20240620"
 VOYAGE_CHAT_URL = "https://api.voyageai.com/v1/chat/completions"
+ANTHROPIC_CHAT_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_VERSION = "2023-06-01"
 
 
 @dataclass(frozen=True)
@@ -46,29 +49,60 @@ class PlanningClient:
         self,
         voyage_key: Optional[str],
         openai_key: Optional[str],
+        anthropic_key: Optional[str] = None,
         voyage_model: str = VOYAGE_DEFAULT_MODEL,
         openai_model: str = OPENAI_DEFAULT_MODEL,
+        anthropic_model: str = ANTHROPIC_DEFAULT_MODEL,
+        provider: Optional[str] = None,
     ) -> None:
-        if openai_key:
+        requested_provider = (
+            provider or os.getenv("PLANNER_PROVIDER") or os.getenv("LLM_PROVIDER") or ""
+        ).strip().lower()
+        if not requested_provider:
+            if openai_key:
+                requested_provider = "openai"
+            elif anthropic_key:
+                requested_provider = "anthropic"
+            elif voyage_key:
+                requested_provider = "voyage"
+
+        if requested_provider == "openai":
+            if not openai_key:
+                raise ValueError("Set OPENAI_API_KEY to use the OpenAI planner provider.")
             self.provider = "openai"
             self._openai_key = openai_key
             self._openai_model = openai_model
+            self._anthropic_key = None
+            self._anthropic_model = None
             self._voyage_key = None
             self._voyage_model = None
-        elif voyage_key:
-            self.provider = "voyage"
+        elif requested_provider == "anthropic":
+            if not anthropic_key:
+                raise ValueError("Set ANTHROPIC_API_KEY to use the Anthropic planner provider.")
+            self.provider = "anthropic"
+            self._anthropic_key = anthropic_key
+            self._anthropic_model = anthropic_model
             self._openai_key = None
             self._openai_model = None
-            self._voyage_key = voyage_key
-            self._voyage_model = voyage_model
+            self._voyage_key = None
+            self._voyage_model = None
+        elif requested_provider == "voyage":
+            raise ValueError(
+                "Voyage AI does not provide chat completions; set PLANNER_PROVIDER=openai "
+                "or anthropic and provide the corresponding API key."
+            )
         else:
-            raise ValueError("Set OPENAI_API_KEY or VOYAGE_API_KEY before running the planner.")
+            raise ValueError(
+                "Specify PLANNER_PROVIDER as 'openai' or 'anthropic' and provide the matching API key."
+            )
 
     def generate_plan(self, prompt: str, task: Optional["CompoundTask"] = None) -> str:
         """Call the configured provider with a deterministic planning prompt."""
         payload = self._build_payload(prompt)
         if self.provider == "openai":
             return self._call_openai(payload)
+        if self.provider == "anthropic":
+            return self._call_anthropic(payload)
         return self._call_voyage(payload)
 
     @staticmethod
@@ -90,16 +124,10 @@ class PlanningClient:
         }
 
     def _call_voyage(self, payload: dict) -> str:
-        assert self._voyage_key and self._voyage_model
-        headers = {
-            "Authorization": f"Bearer {self._voyage_key}",
-            "Content-Type": "application/json",
-        }
-        body = {"model": self._voyage_model, **payload}
-        response = requests.post(VOYAGE_CHAT_URL, headers=headers, json=body, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+        raise RuntimeError(
+            "Voyage AI chat completions are not supported. Please set OPENAI_API_KEY or "
+            "ANTHROPIC_API_KEY and select the appropriate provider."
+        )
 
     def _call_openai(self, payload: dict) -> str:
         headers = {
@@ -113,6 +141,41 @@ class PlanningClient:
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"].strip()
+
+    def _call_anthropic(self, payload: dict) -> str:
+        assert self._anthropic_key and self._anthropic_model
+        system_prompt = ""
+        user_chunks: List[str] = []
+        for msg in payload.get("messages", []):
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role == "system":
+                system_prompt = content
+            else:
+                user_chunks.append(content)
+        body = {
+            "model": self._anthropic_model,
+            "max_tokens": 800,
+            "temperature": payload.get("temperature", 0.1),
+            "messages": [{"role": "user", "content": "\n\n".join(user_chunks)}],
+        }
+        if system_prompt:
+            body["system"] = system_prompt
+        headers = {
+            "x-api-key": self._anthropic_key,
+            "anthropic-version": ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        }
+        response = requests.post(ANTHROPIC_CHAT_URL, headers=headers, json=body, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        content = data.get("content", [])
+        if content and isinstance(content, list):
+            first = content[0]
+            text = first.get("text") if isinstance(first, dict) else first
+            if text:
+                return text.strip()
+        return data.get("output", "").strip()
 
 
 class CompoundMultiTaskAgent:
@@ -181,9 +244,10 @@ PRESET_TASKS: List[CompoundTask] = [
 ]
 
 
-def _load_env_keys() -> tuple[Optional[str], Optional[str]]:
+def _load_env_keys() -> tuple[Optional[str], Optional[str], Optional[str]]:
     voyage_key = os.getenv("VOYAGE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     env_path = Path(__file__).with_name(".env")
     if env_path.exists():
         for line in env_path.read_text().splitlines():
@@ -199,13 +263,20 @@ def _load_env_keys() -> tuple[Optional[str], Optional[str]]:
             if normalized == "OPENAI_API_KEY" and not openai_key and val:
                 openai_key = val
                 os.environ["OPENAI_API_KEY"] = val
-    return voyage_key, openai_key
+            if normalized == "ANTHROPIC_API_KEY" and not anthropic_key and val:
+                anthropic_key = val
+                os.environ["ANTHROPIC_API_KEY"] = val
+    return voyage_key, openai_key, anthropic_key
 
 
 def run_cli() -> None:
     """Entry point that prints plans for the preset compound tasks."""
-    voyage_key, openai_key = _load_env_keys()
-    client = PlanningClient(voyage_key=voyage_key, openai_key=openai_key)
+    voyage_key, openai_key, anthropic_key = _load_env_keys()
+    client = PlanningClient(
+        voyage_key=voyage_key,
+        openai_key=openai_key,
+        anthropic_key=anthropic_key,
+    )
     agent = CompoundMultiTaskAgent(client)
 
     print(f"Using provider: {client.provider}")

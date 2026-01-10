@@ -14,8 +14,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import List, Optional
 
-import voyageai
-
 # Import existing planner infrastructure
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -89,6 +87,7 @@ class MultiAgentRunner:
         self,
         voyage_key: Optional[str] = None,
         openai_key: Optional[str] = None,
+        anthropic_key: Optional[str] = None,
         num_agents: int = 5
     ):
         """Initialize the multi-agent runner.
@@ -100,11 +99,8 @@ class MultiAgentRunner:
         """
         self.voyage_key = voyage_key or os.getenv("VOYAGE_API_KEY")
         self.openai_key = openai_key or os.getenv("OPENAI_API_KEY")
+        self.anthropic_key = anthropic_key or os.getenv("ANTHROPIC_API_KEY")
         self.num_agents = min(num_agents, len(PROMPT_VARIANTS))
-        
-        # Initialize Voyage client
-        if self.voyage_key:
-            voyageai.api_key = self.voyage_key
             
     def run(self, task: str) -> List[AgentResponse]:
         """Run multiple agents on the same task.
@@ -139,7 +135,8 @@ class MultiAgentRunner:
             # Use existing PlanningClient
             client = PlanningClient(
                 voyage_key=self.voyage_key,
-                openai_key=self.openai_key
+                openai_key=self.openai_key,
+                anthropic_key=self.anthropic_key
             )
             
             # Override system prompt for this variant
