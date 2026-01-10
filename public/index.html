@@ -193,7 +193,7 @@
     </div>
 
     <script>
-        const API_BASE = "http://localhost:5000";
+        const API_BASE = "http://localhost:5050";
 
         async function runTask() {
             const btn = document.getElementById("run-btn");
@@ -207,7 +207,7 @@
                 const response = await fetch(`${API_BASE}/tasks`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ task }),
+                    body: JSON.stringify({ input_text: task }),
                 });
                 const data = await response.json();
                 if (!response.ok) {
@@ -222,47 +222,39 @@
         }
 
         async function loadResults(taskId) {
-            const [taskRes, runsRes, familiesRes] = await Promise.all([
-                fetch(`${API_BASE}/tasks/${taskId}`),
-                fetch(`${API_BASE}/tasks/${taskId}/runs`),
-                fetch(`${API_BASE}/tasks/${taskId}/families`),
-            ]);
-
-            const task = await taskRes.json();
-            const runsPayload = await runsRes.json();
-            const familiesPayload = await familiesRes.json();
-            const runs = runsPayload.runs || [];
-            const families = familiesPayload.families || [];
+            const taskRes = await fetch(`${API_BASE}/tasks/${taskId}`);
+            const payload = await taskRes.json();
+            const task = payload.task || {};
+            const runs = payload.runs || [];
 
             document.getElementById("results").style.display = "block";
-            document.getElementById("agents-count").textContent = `${task.valid_runs} / ${task.total_runs}`;
-            document.getElementById("families-count").textContent = task.family_count;
+            const validRuns = runs.filter((run) => run.is_valid).length;
+            document.getElementById("agents-count").textContent = `${validRuns} / ${runs.length}`;
+            document.getElementById("families-count").textContent = task.num_families ?? "-";
             document.getElementById("robustness-status").textContent = task.robustness_status || "-";
-            document.getElementById("answers-agree").textContent = task.answers_agree ? "YES" : "NO";
+            document.getElementById("answers-agree").textContent = "-";
 
-            renderFamilies(families, runs);
+            renderRuns(runs);
         }
 
-        function renderFamilies(families, runs) {
-            const runMap = {};
-            runs.forEach((run) => {
-                runMap[run.run_id] = run;
-            });
-
+        function renderRuns(runs) {
             const list = document.getElementById("families-list");
-            if (!families.length) {
-                list.innerHTML = "<p class='muted'>No families yet.</p>";
+            if (!runs.length) {
+                list.innerHTML = "<p class='muted'>No runs yet.</p>";
                 return;
             }
 
-            list.innerHTML = families.map((family, index) => {
-                const rep = runMap[family.representative_run_id];
-                const steps = rep?.summary?.plan_steps || [];
-                const assumptions = rep?.summary?.assumptions || [];
+            list.innerHTML = runs.map((run, index) => {
+                const steps = run.plan_steps || [];
+                const assumptions = run.assumptions || [];
+                const statusClass = run.is_valid ? "status-robust" : "status-fragile";
+                const statusLabel = run.is_valid ? "VALID" : "INVALID";
                 return `
                     <div class="family-card">
-                        <h4>Family ${index + 1} <span class="status-pill ${family.metrics?.robustness_status === 'ROBUST' ? 'status-robust' : 'status-fragile'}">${family.metrics?.robustness_status || ''}</span></h4>
-                        <div class="muted">${family.family_signature}</div>
+                        <h4>Run ${index + 1} (${escapeHtml(run.agent_role || "agent")})
+                            <span class="status-pill ${statusClass}">${statusLabel}</span>
+                        </h4>
+                        <div class="muted">Final answer: ${escapeHtml(run.final_answer || "-")}</div>
                         <p><strong>Plan Steps</strong></p>
                         <div>${steps.map(step => `<span class="tag">${escapeHtml(step)}</span>`).join("") || "<span class='muted'>None</span>"}</div>
                         <p><strong>Assumptions</strong></p>
