@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPRG - Multi-Path Reasoning Guard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a25;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-red: #ef4444;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border: #2a2a3a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 2rem;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        /* Main container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Input section */
+        .input-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .input-section label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+
+        .input-section textarea {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .input-section textarea:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Results grid */
+        .results {
+            display: none;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        /* Summary card */
+        .summary-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .summary-card.fragile {
+            border-left: 4px solid var(--accent-red);
+        }
+
+        .summary-card.moderate {
+            border-left: 4px solid var(--accent-yellow);
+        }
+
+        .summary-card.robust {
+            border-left: 4px solid var(--accent-green);
+        }
+
+        .summary-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .score-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .score-badge.fragile {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-red);
+        }
+
+        .score-badge.moderate {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent-yellow);
+        }
+
+        .score-badge.robust {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+        }
+
+        .gate-decision {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .summary-stats {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        /* Section headers */
+        .section-header {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Agent cards */
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .agent-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .agent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .agent-id {
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .agent-variant {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            color: var(--text-secondary);
+        }
+
+        .agent-content {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .agent-content strong {
+            color: var(--text-primary);
+        }
+
+        /* Families section */
+        .families-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .family-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .family-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .family-number {
+            font-size: 0.875rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .family-number span {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+
+        .member-count {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .family-key-idea {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            font-style: italic;
+        }
+
+        .family-fol {
+            background: var(--bg-tertiary);
+            padding: 0.75rem;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            color: var(--accent-green);
+            overflow-x: auto;
+        }
+
+        .similarity-bar {
+            margin-top: 0.75rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .similarity-bar label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            width: 60px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 3px;
+        }
+
+        /* Reasoning trace section */
+        .trace-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .trace-item {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .trace-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .trace-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .trace-value {
+            font-size: 0.9rem;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin: 0.25rem 0.25rem 0.25rem 0;
+            color: var(--accent-blue);
+        }
+
+        /* Loading state */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Explanation box */
+        .explanation-box {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .explanation-box p {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .recommendation {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>🛡️ Multi-Path Reasoning Guard</h1>
+        <p>Detect shallow agreement. Validate reasoning robustness before agent execution.</p>
+    </header>
+
+    <div class="container">
+        <!-- Input Section -->
+        <section class="input-section">
+            <label for="task-input">Task Prompt</label>
+            <textarea id="task-input" placeholder="Enter a task for the agents to analyze...
+Example: Plan a 3-hour workflow to sync data across APIs"></textarea>
+            <button class="btn" id="analyze-btn" onclick="analyze()">
+                🔍 Analyze Reasoning
+            </button>
+        </section>
+
+        <!-- Loading State -->
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Running 5 agents with diverse reasoning approaches...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results" id="results">
+            <!-- Summary Card -->
+            <div class="summary-card" id="summary-card">
+                <div class="summary-header">
+                    <span class="gate-decision" id="gate-icon">✅</span>
+                    <div>
+                        <span class="score-badge" id="score-badge">ROBUST</span>
+                        <p style="color: var(--text-secondary); margin-top: 0.25rem;" id="summary-text">
+                            Analysis complete
+                        </p>
+                    </div>
+                </div>
+                <div class="summary-stats">
+                    <div class="stat">
+                        <div class="stat-value" id="agents-count">5</div>
+                        <div class="stat-label">Agents</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="families-count">3</div>
+                        <div class="stat-label">Reasoning Families</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="time-ms">1234</div>
+                        <div class="stat-label">Processing (ms)</div>
+                    </div>
+                </div>
+                <div class="explanation-box">
+                    <p id="explanation-text">Explanation will appear here.</p>
+                    <p class="recommendation" id="recommendation-text">Recommendation will appear here.</p>
+                </div>
+            </div>
+
+            <!-- Families Section -->
+            <div class="section-header">
+                <span>🧬</span> Reasoning Families
+            </div>
+            <div class="families-grid" id="families-grid">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Agent Responses -->
+            <div class="section-header">
+                <span>🤖</span> Agent Responses
+            </div>
+            <div class="agents-grid" id="agents-grid">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Detailed Reasoning Traces -->
+            <div class="section-header">
+                <span>🔬</span> Reasoning Analysis (FOL Translation)
+            </div>
+            <div class="trace-section" id="trace-section">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000';
+
+        async function analyze() {
+            const taskInput = document.getElementById('task-input');
+            const task = taskInput.value.trim();
+            
+            if (!task) {
+                alert('Please enter a task');
+                return;
+            }
+
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').classList.remove('active');
+            document.getElementById('analyze-btn').disabled = true;
+
+            try {
+                const response = await fetch(`${API_URL}/api/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task })
+                });
+
+                const data = await response.json();
+                renderResults(data);
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Analysis failed. Make sure the server is running on localhost:5000');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('analyze-btn').disabled = false;
+            }
+        }
+
+        function renderResults(data) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.classList.add('active');
+
+            // Summary card
+            const score = data.robustness.score.toLowerCase();
+            const summaryCard = document.getElementById('summary-card');
+            summaryCard.className = `summary-card ${score}`;
+
+            const scoreBadge = document.getElementById('score-badge');
+            scoreBadge.className = `score-badge ${score}`;
+            scoreBadge.textContent = data.robustness.score;
+
+            document.getElementById('gate-icon').textContent = data.gate_decision.icon;
+            document.getElementById('summary-text').textContent = data.summary;
+            document.getElementById('agents-count').textContent = data.robustness.total_agents;
+            document.getElementById('families-count').textContent = data.robustness.distinct_families;
+            document.getElementById('time-ms').textContent = data.total_time_ms;
+            document.getElementById('explanation-text').textContent = data.robustness.explanation;
+            document.getElementById('recommendation-text').textContent = data.robustness.recommendation;
+
+            // Families
+            const familiesGrid = document.getElementById('families-grid');
+            familiesGrid.innerHTML = data.families.map((family, idx) => `
+                <div class="family-card">
+                    <div class="family-header">
+                        <div class="family-number">
+                            <span>${idx + 1}</span>
+                            Family ${family.family_id.slice(0, 8)}
+                        </div>
+                        <div class="member-count">${family.member_count} member(s)</div>
+                    </div>
+                    <div class="family-key-idea">"${family.shared_key_idea}"</div>
+                    <div class="family-fol">${escapeHtml(family.shared_fol_pattern)}</div>
+                    <div class="similarity-bar">
+                        <label>FOL</label>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${family.fol_similarity * 100}%"></div>
+                        </div>
+                    </div>
+                    <div class="similarity-bar">
+                        <label>Semantic</label>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${family.semantic_similarity * 100}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Agents
+            const agentsGrid = document.getElementById('agents-grid');
+            agentsGrid.innerHTML = data.agent_responses.map(agent => `
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <span class="agent-id">${agent.agent_id.slice(0, 20)}</span>
+                        <span class="agent-variant">${agent.prompt_variant}</span>
+                    </div>
+                    <div class="agent-content">
+                        <strong>Key Idea:</strong><br>
+                        ${escapeHtml(agent.explanation.slice(0, 200))}...
+                    </div>
+                </div>
+            `).join('');
+
+            // Reasoning traces
+            const traceSection = document.getElementById('trace-section');
+            traceSection.innerHTML = data.analyzed_reasoning.map(trace => `
+                <div class="trace-item">
+                    <div class="trace-label">Agent: ${trace.agent_id.slice(0, 20)}</div>
+                    <div class="trace-value">
+                        <strong>FOL Translation:</strong>
+                        <div class="family-fol" style="margin-top: 0.5rem;">${escapeHtml(trace.fol_translation)}</div>
+                    </div>
+                    <div style="margin-top: 0.75rem;">
+                        <strong>Assumptions:</strong>
+                        <div>${trace.assumptions.map(a => `<span class="tag">${escapeHtml(a)}</span>`).join('')}</div>
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <strong>Key Concepts:</strong>
+                        <div>${trace.key_concepts.slice(0, 5).map(c => `<span class="tag">${escapeHtml(c)}</span>`).join('')}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

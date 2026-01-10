@@ -1,0 +1,11 @@
+# MPRG - Multi-Path Reasoning Guard
+
+pymongo
+dnspython
+voyageai
+chromadb
+flask
+flask-cors
+python-dotenv
+sentence-transformers
+numpy
