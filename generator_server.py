@@ -215,12 +215,12 @@ def _execute_plan(
     family_size: int,
     total_runs: int,
 ) -> dict:
-    """Run the executor agent to generate a final result from the convergent plan."""
+    """Run the executor agent using Claude to generate a final result from the convergent plan."""
     import requests
     
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if not openai_key:
-        return {"error": "OpenAI API key not configured", "executed": False}
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if not anthropic_key:
+        return {"error": "Anthropic API key not configured", "executed": False}
     
     plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
     assumptions_text = "\n".join(f"- {a}" for a in assumptions) if assumptions else "None specified"
@@ -257,22 +257,29 @@ Respond in JSON format:
 }}"""
 
     try:
+        # Use Anthropic API base URL if configured (for proxies)
+        base_url = os.getenv("ANTHROPIC_API_BASE", "https://api.anthropic.com")
+        model = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620")
+        
         response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
+            f"{base_url}/v1/messages",
             headers={
-                "Authorization": f"Bearer {openai_key}",
+                "x-api-key": anthropic_key,
+                "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
             },
             json={
-                "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                "messages": [{"role": "user", "content": prompt}],
+                "model": model,
+                "max_tokens": 2048,
                 "temperature": 0.3,  # Lower temp for execution
+                "messages": [{"role": "user", "content": prompt}],
             },
-            timeout=60,
+            timeout=90,
         )
         response.raise_for_status()
         
-        content = response.json()["choices"][0]["message"]["content"].strip()
+        response_data = response.json()
+        content = response_data.get("content", [{}])[0].get("text", "").strip()
         
         # Try to parse JSON response
         import json
@@ -283,6 +290,7 @@ Respond in JSON format:
             if start != -1 and end > start:
                 result = json.loads(content[start:end])
                 result["executed"] = True
+                result["model_used"] = model
                 result["raw_response"] = content
                 return result
         except json.JSONDecodeError:
@@ -293,6 +301,7 @@ Respond in JSON format:
             "final_result": content,
             "executed": True,
             "confidence": "MEDIUM",
+            "model_used": model,
             "raw_response": content,
         }
         
