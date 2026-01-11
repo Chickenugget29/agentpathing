@@ -71,6 +71,7 @@ def create_task():
                     "assumptions": summary.get("assumptions", []),
                     "final_answer": summary.get("final_answer", ""),
                     "is_valid": run.get("is_valid", False),
+                    "error": run.get("error"),
                     "raw_json": run,
                 },
             )
@@ -99,6 +100,7 @@ def create_run(task_id: str):
                 "assumptions": summary.get("assumptions", []),
                 "final_answer": summary.get("final_answer", ""),
                 "is_valid": run.get("is_valid", False),
+                "error": run.get("error"),
                 "raw_json": run,
             },
         )
@@ -135,6 +137,9 @@ def _analyze_task(task_id: str) -> None:
         families, robustness, analysis_error, metrics = compute_families_and_robustness(
             runs
         )
+        if metrics.get("valid_runs", 0) < 2:
+            families = []
+            robustness = "INSUFFICIENT_DATA"
         family_payload = [
             {
                 "family_id": family.family_id,
@@ -143,22 +148,32 @@ def _analyze_task(task_id: str) -> None:
             }
             for family in families
         ]
+        _update_runs_with_families(runs, families)
         store.update_task_analysis(
             task_id,
             families=family_payload,
             num_families=metrics.get("num_families", len(family_payload)),
             robustness_status=robustness,
             analysis_error=analysis_error,
+            threshold_used=metrics.get("threshold_used"),
+            clustering_method=metrics.get("clustering_method"),
+            family_sizes=[len(family.run_ids) for family in families],
         )
         if robustness == "INSUFFICIENT_DATA":
             store.update_task(task_id, {"robustness_status": "INSUFFICIENT_DATA"})
         valid_runs = metrics.get("valid_runs", 0)
-        mode_counts = metrics.get("mode_counts", {})
+        mode_counts = {
+            "min_similarity": metrics.get("min_similarity"),
+            "avg_similarity": metrics.get("avg_similarity"),
+            "max_similarity": metrics.get("max_similarity"),
+            "sample_top5_similarities": metrics.get("sample_top5_similarities"),
+            "mode_counts": metrics.get("mode_counts"),
+        }
         print(
             "[analysis]",
             "valid_runs=",
             valid_runs,
-            "mode_counts=",
+            "similarity_stats=",
             mode_counts,
             "num_families=",
             len(family_payload),
@@ -174,6 +189,41 @@ def _analyze_task(task_id: str) -> None:
             analysis_error=str(exc),
         )
         print("[analysis] error:", exc)
+
+
+def _update_runs_with_families(runs, families) -> None:
+    run_family_map = {}
+    for family in families:
+        for run_id in family.run_ids:
+            run_family_map[run_id] = (family.family_id, family.rep_run_id)
+
+    for run in runs:
+        run_id = run.get("_id")
+        if not run_id:
+            continue
+        family_info = run_family_map.get(run_id)
+        if not family_info:
+            continue
+        family_id, rep_id = family_info
+        embedding = run.get("raw_json", {}).get("embedding_vector") or []
+        rep_run = next((r for r in runs if r.get("_id") == rep_id), None)
+        similarity = None
+        if rep_run and rep_run.get("raw_json", {}).get("embedding_vector"):
+            from mprg.task_analysis import _cosine_similarity  # local import
+
+            similarity = _cosine_similarity(
+                embedding, rep_run["raw_json"]["embedding_vector"]
+            )
+        store.runs.update_one(
+            {"_id": run_id},
+            {
+                "$set": {
+                    "family_id": family_id,
+                    "family_similarity": similarity,
+                    "family_representative_run_id": rep_id,
+                }
+            },
+        )
 
 
 if __name__ == "__main__":

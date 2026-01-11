@@ -13,6 +13,7 @@ import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -190,28 +191,68 @@ def validate_reasoning_summary(
         if not _is_list_of_strings(data.get(field)):
             return False, f"{field} must be a list of strings."
     for step in data.get("plan_steps", []):
-        normalized = step.strip().lower()
-        if normalized.startswith(("step ", "step-", "step:", "step")):
-            return False, "plan_steps must not include numbering or 'Step' prefixes."
-        if normalized[:3].isdigit() or normalized[:2].isdigit():
-            return False, "plan_steps must not include numbering prefixes."
-        if normalized[:2] in {"1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9."}:
+        if _has_numbering_prefix(step):
             return False, "plan_steps must not include numbering prefixes."
     return True, None
 
 
+def _has_numbering_prefix(text: str) -> bool:
+    normalized = text.strip().lower()
+    if normalized.startswith(("step ", "step-", "step:", "step")):
+        return True
+    if normalized[:2] in {"1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9."}:
+        return True
+    if re.match(r"^\s*[\-\*\u2022]\s+", text):
+        return True
+    if re.match(r"^\s*\d+[\.\)\:\-]\s+", text):
+        return True
+    return False
+
+
+def _clean_plan_step(text: str) -> str:
+    cleaned = re.sub(r"^\s*(step\s*\d+[:\.\)\-]?\s*)", "", text, flags=re.I)
+    cleaned = re.sub(r"^\s*[\-\*\u2022]\s+", "", cleaned)
+    cleaned = re.sub(r"^\s*\d+[\.\)\:\-]\s+", "", cleaned)
+    return cleaned.strip()
+
+
 def _extract_json(response: str) -> Optional[Dict[str, Any]]:
+    cleaned = response.strip()
+    cleaned = re.sub(r"^```(?:json)?", "", cleaned, flags=re.I).strip()
+    cleaned = re.sub(r"```$", "", cleaned).strip()
+    for candidate in (cleaned, _slice_json(cleaned)):
+        if not candidate:
+            continue
+        parsed = _try_parse_json(candidate)
+        if parsed is not None:
+            return parsed
+        repaired = _sanitize_json(candidate)
+        parsed = _try_parse_json(repaired)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _slice_json(text: str) -> Optional[str]:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    return text[start : end + 1]
+
+
+def _try_parse_json(text: str) -> Optional[Dict[str, Any]]:
     try:
-        return json.loads(response)
+        data = json.loads(text)
+        return data if isinstance(data, dict) else None
     except json.JSONDecodeError:
-        start = response.find("{")
-        end = response.rfind("}")
-        if start == -1 or end == -1 or end <= start:
-            return None
-        try:
-            return json.loads(response[start : end + 1])
-        except json.JSONDecodeError:
-            return None
+        return None
+
+
+def _sanitize_json(text: str) -> str:
+    fixed = text.replace("“", '"').replace("”", '"').replace("’", "'")
+    fixed = re.sub(r",\s*([}\]])", r"\1", fixed)
+    return fixed
 
 
 def _deterministic_embed_input(summary: ReasoningSummary) -> str:
@@ -290,6 +331,10 @@ class ReasoningGuardGenerator:
         finished = datetime.now(timezone.utc).isoformat()
         valid_runs = sum(1 for run in runs if run.is_valid)
         invalid_runs = len(runs) - valid_runs
+        if invalid_runs:
+            for run in runs:
+                if not run.is_valid:
+                    print(f"[generator] invalid run {run.agent_role}: {run.error}")
 
         bundle = TaskBundle(
             task_id=task_id,
@@ -314,7 +359,7 @@ class ReasoningGuardGenerator:
 
         response = self._call_llm(task_id, user_prompt, role, constraint, strict=False)
         parsed = _extract_json(response)
-        summary, error = self._validate_or_error(parsed, task_id)
+        summary, error = self._validate_or_error(parsed, task_id, role)
         if summary:
             return TaskRun(
                 agent_role=role,
@@ -327,7 +372,7 @@ class ReasoningGuardGenerator:
 
         retry = self._call_llm(task_id, user_prompt, role, constraint, strict=True)
         parsed_retry = _extract_json(retry)
-        summary_retry, error_retry = self._validate_or_error(parsed_retry, task_id)
+        summary_retry, error_retry = self._validate_or_error(parsed_retry, task_id, role)
         if summary_retry:
             return TaskRun(
                 agent_role=role,
@@ -344,7 +389,7 @@ class ReasoningGuardGenerator:
         ):
             repair = self._call_llm(task_id, user_prompt, role, constraint, strict=True, repair=True)
             parsed_repair = _extract_json(repair)
-            summary_repair, error_repair = self._validate_or_error(parsed_repair, task_id)
+            summary_repair, error_repair = self._validate_or_error(parsed_repair, task_id, role)
             if summary_repair:
                 return TaskRun(
                     agent_role=role,
@@ -366,12 +411,24 @@ class ReasoningGuardGenerator:
         )
 
     def _validate_or_error(
-        self, parsed: Optional[Dict[str, Any]], task_id: str
+        self, parsed: Optional[Dict[str, Any]], task_id: str, agent_role: str
     ) -> Tuple[Optional[ReasoningSummary], Optional[str]]:
         if parsed is None:
             return None, "Output is not valid JSON."
+        if "task_id" not in parsed:
+            parsed["task_id"] = task_id
+        if "agent_role" not in parsed:
+            parsed["agent_role"] = agent_role
         is_valid, error = validate_reasoning_summary(parsed, task_id)
         if not is_valid:
+            if error and "plan_steps must not include numbering prefixes" in error:
+                cleaned = dict(parsed)
+                cleaned_steps = [_clean_plan_step(step) for step in cleaned.get("plan_steps", [])]
+                cleaned["plan_steps"] = [step for step in cleaned_steps if step]
+                is_clean, clean_error = validate_reasoning_summary(cleaned, task_id)
+                if is_clean:
+                    return ReasoningSummary(**cleaned), None
+                return None, clean_error or error
             return None, error
         return ReasoningSummary(**parsed), None
 
@@ -395,9 +452,12 @@ class ReasoningGuardGenerator:
             "fallbacks": ["string"],
         }
         rules = (
-            "Return ONLY valid JSON matching the schema, no extra keys."
+            "Return ONLY valid JSON matching the schema, no extra keys. "
+            "Use double quotes for all strings. No trailing commas. "
+            "Do not wrap in code fences or add commentary."
             if strict
-            else "Return JSON only; do not include chain-of-thought."
+            else "Return JSON only; do not include chain-of-thought. "
+                 "Use double quotes and no code fences."
         )
         step_rules = (
             "plan_steps must be plain strings with no numbering or prefixes. "
@@ -421,11 +481,14 @@ class ReasoningGuardGenerator:
             "Authorization": f"Bearer {self.openai_key}",
             "Content-Type": "application/json",
         }
+        temperature = 0.2 if strict or repair else 0.7
         body = {
             "model": self.openai_model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7,
+            "temperature": temperature,
         }
+        if strict or repair:
+            body["response_format"] = {"type": "json_object"}
         response = requests.post(
             "https://api.openai.com/v1/chat/completions",
             headers=headers,
@@ -457,9 +520,12 @@ class ReasoningGuardGenerator:
             "fallbacks": ["string"],
         }
         rules = (
-            "Return ONLY valid JSON matching the schema, no extra keys."
+            "Return ONLY valid JSON matching the schema, no extra keys. "
+            "Use double quotes for all strings. No trailing commas. "
+            "Do not wrap in code fences or add commentary."
             if strict
-            else "Return JSON only; do not include chain-of-thought."
+            else "Return JSON only; do not include chain-of-thought. "
+                 "Use double quotes and no code fences."
         )
         step_rules = (
             "plan_steps must be plain strings with no numbering or prefixes. "
@@ -479,10 +545,12 @@ class ReasoningGuardGenerator:
             f"{step_rules}\n"
             f"Schema example (types only): {json.dumps(schema)}"
         )
+        temperature = 0.2 if strict or repair else 0.7
         response = self._anthropic.messages.create(
             model=self.anthropic_model,
             max_tokens=800,
-            temperature=0.7,
+            temperature=temperature,
+            system="Return a single JSON object only. Do not include code fences or commentary.",
             messages=[{"role": "user", "content": prompt}],
         )
         parts = []

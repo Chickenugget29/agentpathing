@@ -321,6 +321,7 @@
             const header = `${escapeHtml(run.agent_role || "agent")} ${label ? `(${label})` : ""}`;
             const body = `
                 <div class="muted">Final answer: ${escapeHtml(run.final_answer || "-")}</div>
+                ${run.error ? `<div class="muted">Error: ${escapeHtml(run.error)}</div>` : ""}
                 <p><strong>Plan Steps</strong></p>
                 <div>${steps.map(step => `<span class="tag">${escapeHtml(step)}</span>`).join("") || "<span class='muted'>None</span>"}</div>
                 <p><strong>Assumptions</strong></p>

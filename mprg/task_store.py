@@ -53,6 +53,9 @@ class TaskStore:
         num_families: int,
         robustness_status: str,
         analysis_error: Optional[str] = None,
+        threshold_used: Optional[float] = None,
+        clustering_method: Optional[str] = None,
+        family_sizes: Optional[List[int]] = None,
     ) -> None:
         self.update_task(
             task_id,
@@ -61,6 +64,9 @@ class TaskStore:
                 "num_families": num_families,
                 "robustness_status": robustness_status,
                 "analysis_error": analysis_error,
+                "threshold_used": threshold_used,
+                "clustering_method": clustering_method,
+                "family_sizes": family_sizes,
             },
         )
 
