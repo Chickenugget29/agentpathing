@@ -97,7 +97,7 @@ def generate():
     
     try:
         generator = get_generator()
-        bundle = generator.generate(data["user_prompt"])
+        bundle = generator.generate(data["user_prompt"], num_agents=data.get("num_agents"))
         return jsonify(bundle)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -120,7 +120,10 @@ def create_task():
         task_id = store.create_task(data["input_text"])
         store.update_task(task_id, {"status": "RUNNING"})
         
-        bundle = generator.generate(data["input_text"])
+        bundle = generator.generate(
+            data["input_text"],
+            num_agents=data.get("num_agents")
+        )
         runs = bundle.get("runs", [])
         
         for run in runs:
@@ -216,7 +219,7 @@ def analyze():
     try:
         from mprg.pipeline import result_to_dict
         pipeline = get_pipeline()
-        result = pipeline.analyze(data["task"])
+        result = pipeline.analyze(data["task"], num_agents=data.get("num_agents"))
         return jsonify(result_to_dict(result))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -275,11 +278,181 @@ def patterns():
     return jsonify({"patterns": []})
 
 
+@app.route("/tasks/<task_id>/execute", methods=["POST"])
+@app.route("/api/tasks/<task_id>/execute", methods=["POST", "OPTIONS"])
+def execute_convergent_plan(task_id):
+    """Execute the plan from the largest/most convergent family using Claude."""
+    if request.method == "OPTIONS":
+        return "", 200
+    
+    try:
+        store = get_store()
+        task = store.get_task(task_id)
+        if not task:
+            return jsonify({"error": "Task not found."}), 404
+        
+        families = task.get("families", [])
+        if not families:
+            return jsonify({
+                "error": "No families found. Cannot execute without convergent reasoning."
+            }), 400
+        
+        # Find the largest family (most convergent)
+        largest_family = max(families, key=lambda f: len(f.get("run_ids", [])))
+        family_size = len(largest_family.get("run_ids", []))
+        
+        if family_size < 2:
+            return jsonify({
+                "error": "No convergent family detected (largest family has < 2 runs).",
+                "recommendation": "Need more agreement between agents before execution."
+            }), 400
+        
+        # Get the representative run from the largest family
+        rep_run_id = largest_family.get("rep_run_id")
+        runs = store.get_runs(task_id)
+        rep_run = next((r for r in runs if r.get("_id") == rep_run_id), None)
+        
+        if not rep_run:
+            return jsonify({"error": "Representative run not found."}), 404
+        
+        # Extract the plan from the representative run
+        plan_steps = rep_run.get("plan_steps", [])
+        assumptions = rep_run.get("assumptions", [])
+        original_answer = rep_run.get("final_answer", "")
+        input_text = task.get("input_text", "")
+        
+        # Execute with Claude
+        execution_result = _execute_plan_claude(
+            input_text=input_text,
+            plan_steps=plan_steps,
+            assumptions=assumptions,
+            original_answer=original_answer,
+            family_size=family_size,
+            total_runs=len(runs),
+        )
+        
+        # Store the execution result
+        store.update_task(task_id, {
+            "execution_result": execution_result,
+            "executed_family_id": largest_family.get("family_id"),
+            "executed_family_size": family_size,
+        })
+        
+        return jsonify({
+            "success": True,
+            "family_id": largest_family.get("family_id"),
+            "family_size": family_size,
+            "convergence_ratio": round(family_size / len(runs), 2) if runs else 0,
+            "execution_result": execution_result,
+        })
+        
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(exc)}), 500
+
+
+def _execute_plan_claude(
+    input_text: str,
+    plan_steps: list,
+    assumptions: list,
+    original_answer: str,
+    family_size: int,
+    total_runs: int,
+) -> dict:
+    """Run the final executor agent using Claude API."""
+    import requests
+    
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if not anthropic_key:
+        return {"error": "Anthropic API key not configured", "executed": False}
+    
+    plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
+    assumptions_text = "\n".join(f"- {a}" for a in assumptions) if assumptions else "None specified"
+    
+    prompt = f"""You are a Final Executor Agent. Your job is to execute a verified reasoning plan that has achieved consensus across multiple AI agents.
+
+## Context
+- Original Task: {input_text}
+- Convergence: {family_size}/{total_runs} agents agreed on this reasoning path
+- This plan has been validated as the most robust approach
+
+## Verified Plan to Execute
+{plan_text}
+
+## Assumptions Made
+{assumptions_text}
+
+## Original Proposed Answer
+{original_answer}
+
+## Your Task
+Execute this plan step by step and provide:
+1. The final result/answer with complete details
+2. A confidence assessment based on the reasoning quality
+3. Any caveats or limitations discovered during execution
+
+Respond in JSON format:
+{{
+    "final_result": "The complete executed result/answer",
+    "confidence": "HIGH/MEDIUM/LOW",
+    "reasoning_summary": "Brief summary of how you arrived at this result",
+    "caveats": ["Any limitations or conditions"],
+    "executed_steps": ["Summary of each step executed"]
+}}"""
+
+    try:
+        base_url = os.getenv("ANTHROPIC_API_BASE", "https://api.anthropic.com")
+        model = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620")
+        
+        response = requests.post(
+            f"{base_url}/v1/messages",
+            headers={
+                "x-api-key": anthropic_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": 2048,
+                "temperature": 0.3,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=90,
+        )
+        response.raise_for_status()
+        
+        response_data = response.json()
+        content = response_data.get("content", [{}])[0].get("text", "").strip()
+        
+        import json
+        try:
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start != -1 and end > start:
+                result = json.loads(content[start:end])
+                result["executed"] = True
+                result["model_used"] = model
+                return result
+        except json.JSONDecodeError:
+            pass
+        
+        return {
+            "final_result": content,
+            "executed": True,
+            "confidence": "MEDIUM",
+            "model_used": model,
+        }
+        
+    except Exception as e:
+        return {"error": str(e), "executed": False}
+
+
 # Catch-all for debugging
 @app.route("/<path:path>")
 def catch_all(path):
     return jsonify({
         "error": "Route not found",
         "requested_path": path,
-        "available_routes": ["/", "/generate", "/tasks", "/analyze", "/history"]
+        "available_routes": ["/", "/generate", "/tasks", "/analyze", "/history", "/tasks/<id>/execute"]
     }), 404

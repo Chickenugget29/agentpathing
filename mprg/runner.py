@@ -102,7 +102,7 @@ class MultiAgentRunner:
         self.anthropic_key = anthropic_key or os.getenv("ANTHROPIC_API_KEY")
         self.num_agents = min(num_agents, len(PROMPT_VARIANTS))
             
-    def run(self, task: str) -> List[AgentResponse]:
+    def run(self, task: str, num_agents: Optional[int] = None) -> List[AgentResponse]:
         """Run multiple agents on the same task.
         
         Args:
@@ -111,10 +111,12 @@ class MultiAgentRunner:
         Returns:
             List of AgentResponse objects with plans and explanations
         """
-        variants = PROMPT_VARIANTS[:self.num_agents]
+        count = num_agents or self.num_agents
+        count = max(1, min(count, len(PROMPT_VARIANTS)))
+        variants = PROMPT_VARIANTS[:count]
         
         # Run agents in parallel using ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=self.num_agents) as executor:
+        with ThreadPoolExecutor(max_workers=count) as executor:
             futures = [
                 executor.submit(self._run_single_agent, task, variant)
                 for variant in variants

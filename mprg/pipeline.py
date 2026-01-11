@@ -87,7 +87,7 @@ class OmniPathPipeline:
         except Exception:
             self.ledger = None
             
-    def analyze(self, task: str) -> OmniPathResult:
+    def analyze(self, task: str, num_agents: Optional[int] = None) -> OmniPathResult:
         """Run full OmniPath analysis on a task.
         
         Args:
@@ -100,7 +100,7 @@ class OmniPathPipeline:
         task_id = f"task_{uuid.uuid4().hex[:12]}"
         
         # Step 1: Run multiple agents
-        responses = self.runner.run(task)
+        responses = self.runner.run(task, num_agents=num_agents)
         
         # Step 2: Analyze each response
         analyzed = self.analyzer.analyze_batch(responses, task_id)
