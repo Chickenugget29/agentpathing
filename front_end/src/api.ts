@@ -5,6 +5,8 @@ import type {
     ReasoningStep,
     TrustLevel,
     RobustnessOverview,
+    TaskFamily,
+    TaskRun,
 } from './types';
 
 const API_BASE =
@@ -58,27 +60,23 @@ interface PipelineResponse {
     gate_decision?: PipelineGateDecision;
 }
 
-interface TaskRecord {
-    _id: string;
-    robustness_status?: string;
-    num_families?: number;
-    analysis_error?: string | null;
-    families?: Array<{ family_id: string; rep_run_id: string; run_ids: string[] }>;
-}
-
-interface RunRecord {
-    _id?: string;
-    agent_role?: string;
-    plan_steps?: string[];
-    assumptions?: string[];
-    final_answer?: string;
-    is_valid?: boolean;
-    raw_json?: Record<string, any>;
-}
-
 interface TaskResponsePayload {
-    task: TaskRecord;
-    runs: RunRecord[];
+    task: {
+        _id: string;
+        robustness_status?: string;
+        num_families?: number;
+        analysis_error?: string | null;
+        families?: Array<{ family_id: string; rep_run_id: string; run_ids: string[] }>;
+    };
+    runs: Array<{
+        _id?: string;
+        agent_role?: string;
+        plan_steps?: string[];
+        assumptions?: string[];
+        final_answer?: string;
+        is_valid?: boolean;
+        raw_json?: Record<string, any>;
+    }>;
 }
 
 /**
@@ -206,6 +204,17 @@ function transformPipelineResponse(data: PipelineResponse): AnalysisResult {
 
 function transformTaskPayload(taskId: string, payload: TaskResponsePayload): AnalysisResult {
     const { task, runs } = payload;
+    const summarizedRuns = runs.map<TaskRun>((run) => {
+        const summary = (run.raw_json?.reasoning_summary as Record<string, any>) || {};
+        return {
+            id: run._id,
+            agentRole: run.agent_role,
+            finalAnswer: run.final_answer || summary.final_answer,
+            planSteps: run.plan_steps?.length ? run.plan_steps : summary.plan_steps || [],
+            assumptions: run.assumptions?.length ? run.assumptions : summary.assumptions || [],
+            isValid: run.is_valid,
+        };
+    });
     const agents: AgentData[] = runs.slice(0, AGENT_IDS.length).map((run, index) => {
         const summary = (run.raw_json?.reasoning_summary as Record<string, any>) || {};
         const planSteps = run.plan_steps && run.plan_steps.length > 0 ? run.plan_steps : summary.plan_steps || [];
@@ -232,6 +241,11 @@ function transformTaskPayload(taskId: string, payload: TaskResponsePayload): Ana
         confidence: robustnessStatus === 'ROBUST' ? 'High' : 'Low',
         explanation: `Robustness status: ${robustnessStatus || 'UNKNOWN'}`,
     };
+    const families: TaskFamily[] = (task.families || []).map((family) => ({
+        familyId: family.family_id,
+        repRunId: family.rep_run_id,
+        runIds: family.run_ids || [],
+    }));
 
     return {
         taskId,
@@ -240,6 +254,9 @@ function transformTaskPayload(taskId: string, payload: TaskResponsePayload): Ana
         trustDescription: trust.trustDescription,
         agents,
         robustness,
+        families,
+        runs: summarizedRuns,
+        analysisError: task.analysis_error ?? null,
     };
 }
 
