@@ -260,6 +260,24 @@ function transformTaskPayload(taskId: string, payload: TaskResponsePayload): Ana
     };
 }
 
+function mapRobustnessToTrust(status: string, agents: AgentData[]): { trustLevel: TrustLevel; trustDescription: string } {
+    const upper = status.toUpperCase();
+    if (upper.includes('ROBUST')) {
+        return { trustLevel: 'Robust', trustDescription: 'Multiple reasoning families confirmed by live analysis.' };
+    }
+    if (upper.includes('FRAGILE')) {
+        return { trustLevel: 'Fragile', trustDescription: 'Single reasoning family detected; proceed with caution.' };
+    }
+    if (upper.includes('INSUFFICIENT')) {
+        return {
+            trustLevel: 'Uncertain',
+            trustDescription: 'Not enough valid runs to determine robustness.',
+        };
+    }
+    const fallback = calculateTrustFromAgents(agents);
+    return fallback;
+}
+
 function humanFriendlyName(variant: string, index: number): string {
     if (!variant) return AGENT_NAMES[index] || `Agent ${index + 1}`;
     const label = variant.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
