@@ -2,6 +2,21 @@ export type AgentId = 'A' | 'B' | 'C' | 'D' | 'E' | string;
 
 export type TrustLevel = 'Fragile' | 'Uncertain' | 'Robust';
 
+export interface TaskFamily {
+    familyId: string;
+    repRunId: string;
+    runIds: string[];
+}
+
+export interface TaskRun {
+    id?: string;
+    agentRole?: string;
+    finalAnswer?: string;
+    planSteps?: string[];
+    assumptions?: string[];
+    isValid?: boolean;
+}
+
 export interface ReasoningStep {
     id: number;
     text: string;
@@ -42,6 +57,9 @@ export interface AnalysisResult {
     agents: AgentData[];
     gateDecision?: GateDecisionInfo;
     robustness?: RobustnessOverview;
+    families?: TaskFamily[];
+    runs?: TaskRun[];
+    analysisError?: string | null;
     error?: string;
 }
 

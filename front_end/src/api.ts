@@ -5,6 +5,8 @@ import type {
     ReasoningStep,
     TrustLevel,
     RobustnessOverview,
+    TaskFamily,
+    TaskRun,
 } from './types';
 
 const API_BASE =
@@ -58,10 +60,36 @@ interface PipelineResponse {
     gate_decision?: PipelineGateDecision;
 }
 
+interface TaskResponsePayload {
+    task: {
+        _id: string;
+        robustness_status?: string;
+        num_families?: number;
+        analysis_error?: string | null;
+        families?: Array<{ family_id: string; rep_run_id: string; run_ids: string[] }>;
+    };
+    runs: Array<{
+        _id?: string;
+        agent_role?: string;
+        plan_steps?: string[];
+        assumptions?: string[];
+        final_answer?: string;
+        is_valid?: boolean;
+        raw_json?: Record<string, any>;
+    }>;
+}
+
 /**
- * Generate reasoning analysis using the backend MPRG pipeline.
+ * Generate reasoning analysis by preferring the task-based backend,
+ * falling back to the legacy pipeline if necessary.
  */
 export async function generateAnalysis(userPrompt: string): Promise<AnalysisResult> {
+    try {
+        return await generateFromTaskApi(userPrompt);
+    } catch (taskError) {
+        console.warn('Task-based API failed, falling back to pipeline', taskError);
+    }
+
     const response = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +103,28 @@ export async function generateAnalysis(userPrompt: string): Promise<AnalysisResu
 
     const data: PipelineResponse = await response.json();
     return transformPipelineResponse(data);
+}
+
+async function generateFromTaskApi(userPrompt: string): Promise<AnalysisResult> {
+    const createRes = await fetch(`${API_BASE}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input_text: userPrompt }),
+    });
+
+    if (!createRes.ok) {
+        const error = await safeJson(createRes);
+        throw new Error(error?.error || 'Failed to create task');
+    }
+
+    const { task_id } = await createRes.json();
+    const taskRes = await fetch(`${API_BASE}/tasks/${task_id}`);
+    if (!taskRes.ok) {
+        const error = await safeJson(taskRes);
+        throw new Error(error?.error || 'Failed to fetch task');
+    }
+    const payload: TaskResponsePayload = await taskRes.json();
+    return transformTaskPayload(task_id, payload);
 }
 
 async function safeJson(resp: Response): Promise<any | null> {
@@ -150,6 +200,82 @@ function transformPipelineResponse(data: PipelineResponse): AnalysisResult {
         trustLevel: derivedTrust.trustLevel,
         trustDescription,
     };
+}
+
+function transformTaskPayload(taskId: string, payload: TaskResponsePayload): AnalysisResult {
+    const { task, runs } = payload;
+    const summarizedRuns = runs.map<TaskRun>((run) => {
+        const summary = (run.raw_json?.reasoning_summary as Record<string, any>) || {};
+        return {
+            id: run._id,
+            agentRole: run.agent_role,
+            finalAnswer: run.final_answer || summary.final_answer,
+            planSteps: run.plan_steps?.length ? run.plan_steps : summary.plan_steps || [],
+            assumptions: run.assumptions?.length ? run.assumptions : summary.assumptions || [],
+            isValid: run.is_valid,
+        };
+    });
+    const agents: AgentData[] = runs.slice(0, AGENT_IDS.length).map((run, index) => {
+        const summary = (run.raw_json?.reasoning_summary as Record<string, any>) || {};
+        const planSteps = run.plan_steps && run.plan_steps.length > 0 ? run.plan_steps : summary.plan_steps || [];
+        const assumptions = run.assumptions && run.assumptions.length > 0 ? run.assumptions : summary.assumptions || [];
+        const planText = planSteps.map((step, idx) => `${idx + 1}. ${step}`).join('\n');
+        const reasoning = buildReasoningSteps(planText, undefined);
+        const finalAnswer = run.final_answer || summary.final_answer || 'No answer provided';
+        return {
+            id: AGENT_IDS[index] || run._id || `Agent-${index + 1}`,
+            name: humanFriendlyName(run.agent_role || '', index),
+            finalAnswer,
+            assumptions,
+            reasoning,
+        } satisfies AgentData;
+    });
+
+    detectSharedReasoning(agents);
+
+    const robustnessStatus = (task.robustness_status || '').toUpperCase();
+    const trust = mapRobustnessToTrust(robustnessStatus, agents);
+    const robustness: RobustnessOverview = {
+        totalAgents: runs.length,
+        distinctFamilies: task.num_families ?? task.families?.length ?? 0,
+        confidence: robustnessStatus === 'ROBUST' ? 'High' : 'Low',
+        explanation: `Robustness status: ${robustnessStatus || 'UNKNOWN'}`,
+    };
+    const families: TaskFamily[] = (task.families || []).map((family) => ({
+        familyId: family.family_id,
+        repRunId: family.rep_run_id,
+        runIds: family.run_ids || [],
+    }));
+
+    return {
+        taskId,
+        summary: `Robustness: ${robustnessStatus || 'UNKNOWN'}`,
+        trustLevel: trust.trustLevel,
+        trustDescription: trust.trustDescription,
+        agents,
+        robustness,
+        families,
+        runs: summarizedRuns,
+        analysisError: task.analysis_error ?? null,
+    };
+}
+
+function mapRobustnessToTrust(status: string, agents: AgentData[]): { trustLevel: TrustLevel; trustDescription: string } {
+    const upper = status.toUpperCase();
+    if (upper.includes('ROBUST')) {
+        return { trustLevel: 'Robust', trustDescription: 'Multiple reasoning families confirmed by live analysis.' };
+    }
+    if (upper.includes('FRAGILE')) {
+        return { trustLevel: 'Fragile', trustDescription: 'Single reasoning family detected; proceed with caution.' };
+    }
+    if (upper.includes('INSUFFICIENT')) {
+        return {
+            trustLevel: 'Uncertain',
+            trustDescription: 'Not enough valid runs to determine robustness.',
+        };
+    }
+    const fallback = calculateTrustFromAgents(agents);
+    return fallback;
 }
 
 function humanFriendlyName(variant: string, index: number): string {
