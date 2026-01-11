@@ -1,4 +1,4 @@
-"""Main MPRG pipeline - ties all components together.
+"""Main OmniPath pipeline - ties all components together.
 
 This is the end-to-end flow:
 1. Task → Multi-Agent Runner → 5 responses
@@ -25,8 +25,8 @@ from .db import ReasoningLedger, AgentOutput, ReasoningTrace, RobustnessResult
 
 
 @dataclass
-class MPRGResult:
-    """Complete MPRG analysis result with full visibility."""
+class OmniPathResult:
+    """Complete OmniPath analysis result with full visibility."""
     task_id: str
     task_prompt: str
     
@@ -44,8 +44,8 @@ class MPRGResult:
     summary: str
 
 
-class MPRGPipeline:
-    """Complete MPRG pipeline with full reasoning visibility.
+class OmniPathPipeline:
+    """Complete OmniPath pipeline with full reasoning visibility.
     
     Designed to make every step of reasoning analysis visible
     for hackathon demo.
@@ -87,14 +87,14 @@ class MPRGPipeline:
         except Exception:
             self.ledger = None
             
-    def analyze(self, task: str) -> MPRGResult:
-        """Run full MPRG analysis on a task.
+    def analyze(self, task: str) -> OmniPathResult:
+        """Run full OmniPath analysis on a task.
         
         Args:
             task: The task prompt to analyze
             
         Returns:
-            MPRGResult with complete visibility into all layers
+            OmniPathResult with complete visibility into all layers
         """
         start_time = time.time()
         task_id = f"task_{uuid.uuid4().hex[:12]}"
@@ -126,7 +126,7 @@ class MPRGPipeline:
         # Create summary
         summary = self._create_summary(robustness, gate_result)
         
-        return MPRGResult(
+        return OmniPathResult(
             task_id=task_id,
             task_prompt=task,
             total_time_ms=total_time_ms,
@@ -260,8 +260,8 @@ class MPRGPipeline:
         }
 
 
-def result_to_dict(result: MPRGResult) -> Dict[str, Any]:
-    """Convert MPRGResult to JSON-serializable dict."""
+def result_to_dict(result: OmniPathResult) -> Dict[str, Any]:
+    """Convert OmniPathResult to a JSON-serializable dict."""
     return asdict(result)
 
 
@@ -277,7 +277,7 @@ if __name__ == "__main__":
     task = " ".join(sys.argv[1:])
     print(f"\n🔍 Analyzing task: {task}\n")
     
-    pipeline = MPRGPipeline()
+    pipeline = OmniPathPipeline()
     result = pipeline.analyze(task)
     
     print(f"\n{result.summary}")

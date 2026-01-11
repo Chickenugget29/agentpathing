@@ -1,4 +1,4 @@
-"""Minimal HTTP API for Reasoning Guard Generator."""
+"""Minimal HTTP API for the OmniPath Generator."""
 
 from __future__ import annotations
 
@@ -412,5 +412,5 @@ def _update_runs_with_families(runs, families) -> None:
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5050"))
-    print(f"🚀 Reasoning Guard Generator on http://localhost:{port}")
+    print(f"🚀 OmniPath Generator on http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=True)

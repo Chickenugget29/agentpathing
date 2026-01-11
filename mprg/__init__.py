@@ -1,4 +1,4 @@
-"""MPRG - Multi-Path Reasoning Guard package."""
+"""OmniPath - Multi-Path Reasoning Guard package."""
 
 from .runner import MultiAgentRunner
 from .analyzer import ReasoningAnalyzer
@@ -6,7 +6,7 @@ from .grouper import FamilyGrouper
 from .scorer import RobustnessScorer
 from .gate import ExecutionGate
 from .db import ReasoningLedger
-from .pipeline import MPRGPipeline
+from .pipeline import OmniPathPipeline
 
 __all__ = [
     "MultiAgentRunner",
@@ -15,5 +15,5 @@ __all__ = [
     "RobustnessScorer",
     "ExecutionGate",
     "ReasoningLedger",
-    "MPRGPipeline",
+    "OmniPathPipeline",
 ]

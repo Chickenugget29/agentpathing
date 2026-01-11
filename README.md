@@ -1,10 +1,10 @@
-# MPRG - Multi-Path Reasoning Guard
+# OmniPath - Multi-Path Reasoning Guard
 
 A safety gate that validates agentic workflows by checking whether **multiple distinct reasoning families** support a plan or answer — not just surface-level agreement.
 
 ## 🔑 Core Concept
 
-Before an agent acts, MPRG checks if there are **different reasoning paths** behind the output, not just multiple agents saying the same thing.
+Before an agent acts, OmniPath checks if there are **different reasoning paths** behind the output, not just multiple agents saying the same thing.
 
 ## ✅ What This Build Includes
 
@@ -54,7 +54,7 @@ python server.py
 
 Open `web/index.html` in your browser.
 
-## 🧩 Reasoning Guard Generator (Standalone)
+## 🧩 OmniPath Generator (Standalone)
 
 This module runs diverse agents and returns a JSON TaskBundle without touching MongoDB.
 
@@ -127,7 +127,7 @@ agentpathing/
 
 1. Enter a task prompt in the UI
 2. Watch 3–5 agent runs execute in parallel
-3. MPRG clusters reasoning families
+3. OmniPath clusters reasoning families
 4. See robustness status + answer agreement
 
 ## 📜 License

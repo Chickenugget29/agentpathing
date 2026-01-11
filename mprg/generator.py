@@ -1,4 +1,4 @@
-"""Reasoning Guard Generator module for MPRG.
+"""Reasoning Guard Generator module for OmniPath.
 
 Runs diverse LLM agents in parallel and returns a TaskBundle JSON.
 No chain-of-thought is requested or stored.

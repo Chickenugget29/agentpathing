@@ -1,4 +1,4 @@
-"""MongoDB Atlas integration for MPRG reasoning ledger.
+"""MongoDB Atlas integration for the OmniPath reasoning ledger.
 
 This module provides durable storage for all reasoning traces,
 enabling crash recovery, historical analysis, and demo replay.

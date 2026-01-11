@@ -1,4 +1,4 @@
-"""Data models and validation for MPRG ReasoningSummary."""
+"""Data models and validation for OmniPath ReasoningSummary."""
 
 from __future__ import annotations
 
