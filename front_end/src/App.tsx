@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { FRAGILE_SCENARIO, ROBUST_SCENARIO } from './data';
-import { generateAnalysis } from './api';
-import type { Scenario, AnalysisResult, TaskFamily, TaskRun } from './types';
+import { generateAnalysis, executeConvergentPlan } from './api';
+import type { Scenario, AnalysisResult, TaskFamily, TaskRun, ExecutionResult } from './types';
 import { TopBar } from './components/TopBar';
 import { PromptInput } from './components/PromptInput';
 import { AgentPanel } from './components/AgentPanel';
 import { TrustEvaluation } from './components/TrustEvaluation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { RefreshCw, Loader2, Zap, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 function App() {
     const [hasAnalyzed, setHasAnalyzed] = useState(false);
@@ -16,6 +16,9 @@ function App() {
     const [scenarioId, setScenarioId] = useState<'fragile' | 'robust' | 'live'>('fragile');
     const [liveResult, setLiveResult] = useState<AnalysisResult | null>(null);
     const [key, setKey] = useState(0);
+    const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
+    const [isExecuting, setIsExecuting] = useState(false);
+    const [executionError, setExecutionError] = useState<string | null>(null);
 
     // Get current scenario data
     const currentScenario: Scenario = scenarioId === 'live' && liveResult
@@ -69,7 +72,26 @@ function App() {
         setError(null);
         setScenarioId('fragile');
         setKey(prev => prev + 1);
+        setExecutionResult(null);
+        setExecutionError(null);
     }
+
+    const handleExecute = async () => {
+        if (!liveResult?.taskId) return;
+
+        setIsExecuting(true);
+        setExecutionError(null);
+
+        try {
+            const result = await executeConvergentPlan(liveResult.taskId);
+            setExecutionResult(result);
+        } catch (err) {
+            console.error('Execution failed:', err);
+            setExecutionError(err instanceof Error ? err.message : 'Execution failed');
+        } finally {
+            setIsExecuting(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-[#0A0A0B] flex flex-col font-sans selection:bg-white/20">
@@ -133,6 +155,47 @@ function App() {
 
                 {scenarioId === 'live' && liveResult?.runs && liveResult.runs.length > 0 && (
                     <LiveFamiliesSection result={liveResult} />
+                )}
+
+                {/* Final Executor Section */}
+                {scenarioId === 'live' && liveResult?.taskId && liveResult?.families && liveResult.families.length > 0 && (
+                    <section className="mt-12 space-y-6">
+                        <div className="flex items-center justify-between flex-wrap gap-4">
+                            <div>
+                                <p className="text-sm uppercase tracking-[0.3em] text-gray-500">Final Step</p>
+                                <h2 className="text-2xl font-semibold text-white">Execute Convergent Plan</h2>
+                            </div>
+                            {!executionResult && !isExecuting && (
+                                <button
+                                    onClick={handleExecute}
+                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-xl hover:from-emerald-400 hover:to-teal-400 transition-all shadow-lg shadow-emerald-500/25"
+                                >
+                                    <Zap className="w-5 h-5" />
+                                    Run Final Agent
+                                </button>
+                            )}
+                        </div>
+
+                        {isExecuting && (
+                            <div className="flex flex-col items-center justify-center py-12 bg-white/5 border border-white/10 rounded-2xl">
+                                <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mb-4" />
+                                <p className="text-gray-400">Executing convergent plan with final agent...</p>
+                            </div>
+                        )}
+
+                        {executionError && (
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+                                <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+                                <div className="text-sm text-red-200">
+                                    <span className="font-semibold">Execution failed:</span> {executionError}
+                                </div>
+                            </div>
+                        )}
+
+                        {executionResult && (
+                            <ExecutionResultCard result={executionResult} />
+                        )}
+                    </section>
                 )}
             </main>
 
@@ -285,10 +348,10 @@ const RunCard: React.FC<{ run: TaskRun; index: number; highlight?: boolean; labe
                 <div className="flex flex-wrap gap-2 mt-1">
                     {steps.length
                         ? steps.map((step, idx) => (
-                              <span key={idx} className="bg-black/30 border border-white/10 rounded-full text-xs px-2 py-1">
-                                  {step}
-                              </span>
-                          ))
+                            <span key={idx} className="bg-black/30 border border-white/10 rounded-full text-xs px-2 py-1">
+                                {step}
+                            </span>
+                        ))
                         : <span className="text-xs text-gray-500">None</span>}
                 </div>
             </div>
@@ -297,10 +360,10 @@ const RunCard: React.FC<{ run: TaskRun; index: number; highlight?: boolean; labe
                 <div className="flex flex-wrap gap-2 mt-1">
                     {assumptions.length
                         ? assumptions.map((asm, idx) => (
-                              <span key={idx} className="bg-black/30 border border-white/10 rounded-full text-xs px-2 py-1">
-                                  {asm}
-                              </span>
-                          ))
+                            <span key={idx} className="bg-black/30 border border-white/10 rounded-full text-xs px-2 py-1">
+                                {asm}
+                            </span>
+                        ))
                         : <span className="text-xs text-gray-500">None</span>}
                 </div>
             </div>
@@ -348,3 +411,106 @@ function badgeClass(status: string) {
     if (key.includes('INSUFFICIENT')) return 'bg-gray-600/30 text-gray-200';
     return 'bg-gray-700/40 text-gray-200';
 }
+
+const ExecutionResultCard: React.FC<{ result: ExecutionResult }> = ({ result }) => {
+    const exec = result.execution_result;
+
+    if (!exec) {
+        return (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-200">
+                No execution result available
+            </div>
+        );
+    }
+
+    if (exec.error) {
+        return (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-200">
+                <span className="font-semibold">Execution Error:</span> {exec.error}
+            </div>
+        );
+    }
+
+    const confidenceColors = {
+        HIGH: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30',
+        MEDIUM: 'bg-amber-500/20 text-amber-200 border-amber-500/30',
+        LOW: 'bg-red-500/20 text-red-200 border-red-500/30',
+    };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 rounded-2xl p-6 space-y-6"
+        >
+            {/* Header with success indicator */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-emerald-500/20 rounded-full">
+                        <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-white">Execution Complete</h3>
+                        <p className="text-sm text-gray-400">
+                            Convergence: {result.family_size}/{Math.round((result.convergence_ratio || 0) * result.family_size! / (result.convergence_ratio || 1))} agents agreed
+                        </p>
+                    </div>
+                </div>
+                {exec.confidence && (
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${confidenceColors[exec.confidence] || confidenceColors.MEDIUM}`}>
+                        {exec.confidence} CONFIDENCE
+                    </span>
+                )}
+            </div>
+
+            {/* Final Result */}
+            <div className="bg-black/30 rounded-xl p-5">
+                <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Final Result</div>
+                <div className="text-lg text-white font-medium leading-relaxed">
+                    {exec.final_result || 'No result provided'}
+                </div>
+            </div>
+
+            {/* Reasoning Summary */}
+            {exec.reasoning_summary && (
+                <div>
+                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Reasoning Summary</div>
+                    <p className="text-gray-300 text-sm">{exec.reasoning_summary}</p>
+                </div>
+            )}
+
+            {/* Executed Steps */}
+            {exec.executed_steps && exec.executed_steps.length > 0 && (
+                <div>
+                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Executed Steps</div>
+                    <div className="space-y-2">
+                        {exec.executed_steps.map((step, idx) => (
+                            <div key={idx} className="flex items-start gap-3 text-sm">
+                                <span className="flex-shrink-0 w-6 h-6 bg-emerald-500/20 text-emerald-300 rounded-full flex items-center justify-center text-xs font-semibold">
+                                    {idx + 1}
+                                </span>
+                                <span className="text-gray-300">{step}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Caveats */}
+            {exec.caveats && exec.caveats.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                    <div className="text-xs uppercase tracking-wide text-amber-400 mb-2 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" />
+                        Caveats & Limitations
+                    </div>
+                    <ul className="list-disc list-inside text-sm text-amber-200/80 space-y-1">
+                        {exec.caveats.map((caveat, idx) => (
+                            <li key={idx}>{caveat}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </motion.div>
+    );
+};
+

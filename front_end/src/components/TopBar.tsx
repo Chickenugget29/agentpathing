@@ -6,7 +6,7 @@ export const TopBar: React.FC = () => {
             <div className="flex items-center gap-2">
                 {/* Simple geometric logo placeholder */}
                 <div className="w-4 h-4 bg-white rounded-full opacity-90" />
-                <span className="text-lg font-medium tracking-tight text-white">ReasonStack</span>
+                <span className="text-lg font-medium tracking-tight text-white">OmniPath</span>
             </div>
 
             <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10">

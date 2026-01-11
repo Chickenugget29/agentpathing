@@ -1,4 +1,4 @@
-"""Minimal HTTP API for Reasoning Guard Generator."""
+"""Minimal HTTP API for the OmniPath Generator."""
 
 from __future__ import annotations
 
@@ -134,6 +134,175 @@ def list_tasks():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/tasks/<task_id>/execute", methods=["POST"])
+def execute_convergent_plan(task_id: str):
+    """
+    Execute the plan from the largest/most convergent family.
+    This runs a final agent that takes the representative plan and generates
+    the actual result by following the reasoning steps.
+    """
+    try:
+        task = store.get_task(task_id)
+        if not task:
+            return jsonify({"error": "Task not found."}), 404
+        
+        families = task.get("families", [])
+        if not families:
+            return jsonify({
+                "error": "No families found. Cannot execute without convergent reasoning."
+            }), 400
+        
+        # Find the largest family (most convergent)
+        largest_family = max(families, key=lambda f: len(f.get("run_ids", [])))
+        family_size = len(largest_family.get("run_ids", []))
+        
+        if family_size < 2:
+            return jsonify({
+                "error": "No convergent family detected (largest family has < 2 runs).",
+                "recommendation": "Need more agreement between agents before execution."
+            }), 400
+        
+        # Get the representative run from the largest family
+        rep_run_id = largest_family.get("rep_run_id")
+        runs = store.get_runs(task_id)
+        rep_run = next((r for r in runs if r.get("_id") == rep_run_id), None)
+        
+        if not rep_run:
+            return jsonify({"error": "Representative run not found."}), 404
+        
+        # Extract the plan from the representative run
+        plan_steps = rep_run.get("plan_steps", [])
+        assumptions = rep_run.get("assumptions", [])
+        original_answer = rep_run.get("final_answer", "")
+        input_text = task.get("input_text", "")
+        
+        # Build the execution prompt
+        execution_result = _execute_plan(
+            input_text=input_text,
+            plan_steps=plan_steps,
+            assumptions=assumptions,
+            original_answer=original_answer,
+            family_size=family_size,
+            total_runs=len(runs),
+        )
+        
+        # Store the execution result
+        store.update_task(task_id, {
+            "execution_result": execution_result,
+            "executed_family_id": largest_family.get("family_id"),
+            "executed_family_size": family_size,
+        })
+        
+        return jsonify({
+            "success": True,
+            "family_id": largest_family.get("family_id"),
+            "family_size": family_size,
+            "convergence_ratio": round(family_size / len(runs), 2) if runs else 0,
+            "execution_result": execution_result,
+        })
+        
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(exc)}), 500
+
+
+def _execute_plan(
+    input_text: str,
+    plan_steps: list,
+    assumptions: list,
+    original_answer: str,
+    family_size: int,
+    total_runs: int,
+) -> dict:
+    """Run the executor agent to generate a final result from the convergent plan."""
+    import requests
+    
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        return {"error": "OpenAI API key not configured", "executed": False}
+    
+    plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
+    assumptions_text = "\n".join(f"- {a}" for a in assumptions) if assumptions else "None specified"
+    
+    prompt = f"""You are a Final Executor Agent. Your job is to execute a verified reasoning plan that has achieved consensus across multiple AI agents.
+
+## Context
+- Original Task: {input_text}
+- Convergence: {family_size}/{total_runs} agents agreed on this reasoning path
+- This plan has been validated as the most robust approach
+
+## Verified Plan to Execute
+{plan_text}
+
+## Assumptions Made
+{assumptions_text}
+
+## Original Proposed Answer
+{original_answer}
+
+## Your Task
+Execute this plan step by step and provide:
+1. The final result/answer with complete details
+2. A confidence assessment based on the reasoning quality
+3. Any caveats or limitations discovered during execution
+
+Respond in JSON format:
+{{
+    "final_result": "The complete executed result/answer",
+    "confidence": "HIGH/MEDIUM/LOW",
+    "reasoning_summary": "Brief summary of how you arrived at this result",
+    "caveats": ["Any limitations or conditions"],
+    "executed_steps": ["Summary of each step executed"]
+}}"""
+
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {openai_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3,  # Lower temp for execution
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        
+        content = response.json()["choices"][0]["message"]["content"].strip()
+        
+        # Try to parse JSON response
+        import json
+        try:
+            # Extract JSON from response
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start != -1 and end > start:
+                result = json.loads(content[start:end])
+                result["executed"] = True
+                result["raw_response"] = content
+                return result
+        except json.JSONDecodeError:
+            pass
+        
+        # Fallback if not valid JSON
+        return {
+            "final_result": content,
+            "executed": True,
+            "confidence": "MEDIUM",
+            "raw_response": content,
+        }
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "executed": False,
+        }
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path: str):
@@ -247,5 +416,5 @@ def _update_runs_with_families(runs, families) -> None:
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5050"))
-    print(f"🚀 Reasoning Guard Generator on http://localhost:{port}")
+    print(f"🚀 OmniPath Generator on http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=True)

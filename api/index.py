@@ -26,8 +26,8 @@ _store = None
 def get_pipeline():
     global _pipeline
     if _pipeline is None:
-        from mprg.pipeline import MPRGPipeline
-        _pipeline = MPRGPipeline(
+        from mprg.pipeline import OmniPathPipeline
+        _pipeline = OmniPathPipeline(
             voyage_key=os.getenv("VOYAGE_API_KEY"),
             openai_key=os.getenv("OPENAI_API_KEY"),
             mongodb_uri=os.getenv("MONGODB_URI")
@@ -69,14 +69,14 @@ def get_store():
 @app.route("/api/")
 def home():
     return jsonify({
-        "service": "MPRG - Multi-Path Reasoning Guard",
+        "service": "OmniPath - Multi-Path Reasoning Guard",
         "status": "running",
         "endpoints": [
             "POST /api/generate - Generate reasoning analysis",
             "POST /api/tasks - Create and run a task",
             "GET /api/tasks - List recent tasks",
             "GET /api/tasks/<id> - Get task details",
-            "POST /api/analyze - Run MPRG analysis",
+            "POST /api/analyze - Run OmniPath analysis",
             "GET /api/history - Get analysis history",
         ]
     })
@@ -200,7 +200,7 @@ def create_run(task_id):
         return jsonify({"error": str(e)}), 500
 
 
-# ============ MPRG Analysis Endpoints ============
+# ============ OmniPath Analysis Endpoints ============
 
 
 @app.route("/analyze", methods=["POST"])

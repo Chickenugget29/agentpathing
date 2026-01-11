@@ -1,4 +1,4 @@
-# MPRG - Multi-Path Reasoning Guard
+# OmniPath - Multi-Path Reasoning Guard
 # Vercel deployment
 
 # Web framework

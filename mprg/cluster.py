@@ -1,4 +1,4 @@
-"""Reasoning family clustering for MPRG."""
+"""Reasoning family clustering for OmniPath."""
 
 from __future__ import annotations
 

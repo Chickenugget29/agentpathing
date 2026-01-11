@@ -1,4 +1,4 @@
-"""Flask API server for MPRG - Render deployment."""
+"""Flask API server for OmniPath - Render deployment."""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ _pipeline = None
 def get_pipeline():
     global _pipeline
     if _pipeline is None:
-        from mprg.pipeline import MPRGPipeline
-        _pipeline = MPRGPipeline(
+        from mprg.pipeline import OmniPathPipeline
+        _pipeline = OmniPathPipeline(
             voyage_key=os.getenv("VOYAGE_API_KEY"),
             openai_key=os.getenv("OPENAI_API_KEY"),
             mongodb_uri=os.getenv("MONGODB_URI")
@@ -33,10 +33,10 @@ def get_pipeline():
 def home():
     """Health check."""
     return jsonify({
-        "service": "MPRG - Multi-Path Reasoning Guard",
+        "service": "OmniPath - Multi-Path Reasoning Guard",
         "status": "running",
         "endpoints": [
-            "POST /api/analyze - Run MPRG analysis",
+            "POST /api/analyze - Run OmniPath analysis",
             "GET /api/history - Get recent analyses",
             "GET /api/task?id=<id> - Get specific task analysis",
             "POST /api/override - Override gate decision",
@@ -47,7 +47,7 @@ def home():
 
 @app.route("/api/analyze", methods=["POST", "OPTIONS"])
 def analyze():
-    """Run MPRG analysis on a task."""
+    """Run OmniPath analysis on a task."""
     if request.method == "OPTIONS":
         return "", 200
     
@@ -132,5 +132,5 @@ def fragile_patterns():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    print(f"\n🚀 Starting MPRG server on http://localhost:{port}")
+    print(f"\n🚀 Starting OmniPath server on http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)

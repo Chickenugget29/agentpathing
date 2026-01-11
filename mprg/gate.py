@@ -50,7 +50,7 @@ class GateResult:
 class ExecutionGate:
     """Gate that decides whether to allow agent execution.
     
-    This is where MPRG turns insight into action:
+    This is where OmniPath turns insight into action:
     - Before a long-running agent acts, check reasoning robustness
     - Block fragile plans before they waste resources
     - Allow robust plans to proceed confidently

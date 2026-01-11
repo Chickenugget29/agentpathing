@@ -68,3 +68,20 @@ export interface Scenario extends AnalysisResult {
     id: 'fragile' | 'robust';
     label: string;
 }
+
+export interface ExecutionResult {
+    success?: boolean;
+    family_id?: string;
+    family_size?: number;
+    convergence_ratio?: number;
+    execution_result?: {
+        final_result?: string;
+        confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+        reasoning_summary?: string;
+        caveats?: string[];
+        executed_steps?: string[];
+        executed?: boolean;
+        error?: string;
+    };
+    error?: string;
+}

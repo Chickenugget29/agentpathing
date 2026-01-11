@@ -1,4 +1,4 @@
-"""Orchestrator for running MPRG tasks end-to-end."""
+"""Orchestrator for running OmniPath tasks end-to-end."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .embeddings import EmbeddingModel
 from .store import MongoStore
 
 
-class MPRGOrchestrator:
+class OmniPathOrchestrator:
     """Coordinates agent runs, clustering, and persistence."""
 
     def __init__(

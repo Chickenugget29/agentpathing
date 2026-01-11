@@ -11,7 +11,7 @@ from pymongo import MongoClient
 
 
 class MongoStore:
-    """MongoDB-backed system-of-record for MPRG."""
+    """MongoDB-backed system-of-record for OmniPath."""
 
     def __init__(self, uri: Optional[str] = None, db_name: str = "mprg") -> None:
         uri = uri or os.getenv("MONGODB_URI")
