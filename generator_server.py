@@ -23,7 +23,7 @@ FRONTEND_DIST = Path(__file__).resolve().parent / "front_end" / "dist"
 FRONTEND_DIST_STR = str(FRONTEND_DIST)
 
 generator = ReasoningGuardGenerator(
-    provider=os.getenv("LLM_PROVIDER", "openai"),
+    provider=os.getenv("LLM_PROVIDER", "anthropic"),
     openai_key=os.getenv("OPENAI_API_KEY"),
     openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
     anthropic_key=os.getenv("ANTHROPIC_API_KEY"),
@@ -42,8 +42,9 @@ def generate():
     if not data or "user_prompt" not in data:
         return jsonify({"error": "Missing 'user_prompt' in request body."}), 400
     prompt = data["user_prompt"]
+    agent_count = data.get("agent_count")
     try:
-        bundle = generator.generate(prompt)
+        bundle = generator.generate(prompt, num_agents=agent_count)
         return jsonify(bundle)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -55,10 +56,11 @@ def create_task():
     if not data or "input_text" not in data:
         return jsonify({"error": "Missing 'input_text' in request body."}), 400
     input_text = data["input_text"]
+    agent_count = data.get("agent_count")
     try:
         task_id = store.create_task(input_text)
         store.update_task(task_id, {"status": "RUNNING"})
-        bundle = generator.generate(input_text)
+        bundle = generator.generate(input_text, num_agents=agent_count)
         runs = bundle.get("runs", [])
         for run in runs:
             summary = run.get("reasoning_summary") or {}
@@ -217,10 +219,16 @@ def _execute_plan(
 ) -> dict:
     """Run the executor agent to generate a final result from the convergent plan."""
     import requests
+    import json
+    try:
+        from anthropic import Anthropic
+    except Exception:
+        Anthropic = None
     
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
-    if not openai_key:
-        return {"error": "OpenAI API key not configured", "executed": False}
+    if not anthropic_key and not openai_key:
+        return {"error": "No LLM API key not configured", "executed": False}
     
     plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
     assumptions_text = "\n".join(f"- {a}" for a in assumptions) if assumptions else "None specified"
@@ -257,27 +265,36 @@ Respond in JSON format:
 }}"""
 
     try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {openai_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,  # Lower temp for execution
-            },
-            timeout=60,
-        )
-        response.raise_for_status()
-        
-        content = response.json()["choices"][0]["message"]["content"].strip()
-        
-        # Try to parse JSON response
-        import json
+        if anthropic_key and Anthropic is not None:
+            client = Anthropic(api_key=anthropic_key)
+            response = client.messages.create(
+                model=os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620"),
+                max_tokens=800,
+                temperature=0.2,
+                system="Return JSON only. Do not include commentary or code fences.",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            content = "\n".join(
+                [part.text for part in response.content if getattr(part, "type", None) == "text"]
+            ).strip()
+        else:
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openai_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.2,
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"].strip()
+
         try:
-            # Extract JSON from response
             start = content.find("{")
             end = content.rfind("}") + 1
             if start != -1 and end > start:
@@ -287,20 +304,16 @@ Respond in JSON format:
                 return result
         except json.JSONDecodeError:
             pass
-        
-        # Fallback if not valid JSON
+
         return {
             "final_result": content,
             "executed": True,
             "confidence": "MEDIUM",
             "raw_response": content,
         }
-        
+
     except Exception as e:
-        return {
-            "error": str(e),
-            "executed": False,
-        }
+        return {"error": str(e), "executed": False}
 
 
 @app.route("/", defaults={"path": ""})

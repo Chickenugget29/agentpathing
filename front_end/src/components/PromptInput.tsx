@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 
 interface PromptInputProps {
-    onAnalyze: (prompt: string) => void;
+    onAnalyze: (prompt: string, agentCount: number) => void;
     onDemoAnalyze?: () => void;
     isAnalyzed: boolean;
     isLoading?: boolean;
@@ -16,10 +16,11 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     isLoading = false
 }) => {
     const [value, setValue] = useState('');
+    const [agentCount, setAgentCount] = useState(5);
 
     const handleAnalyze = () => {
         if (!value.trim()) return;
-        onAnalyze(value.trim());
+        onAnalyze(value.trim(), agentCount);
     };
 
     const handleDemo = () => {
@@ -74,6 +75,18 @@ export const PromptInput: React.FC<PromptInputProps> = ({
                         </span>
                     )}
                 </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                <span>Agents: {agentCount}</span>
+                <input
+                    type="range"
+                    min={3}
+                    max={10}
+                    value={agentCount}
+                    onChange={(e) => setAgentCount(Number(e.target.value))}
+                    className="w-40 accent-white"
+                    disabled={isLoading}
+                />
             </div>
         </div>
     );

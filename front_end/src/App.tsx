@@ -29,12 +29,12 @@ function App() {
         }
         : scenarioId === 'fragile' ? FRAGILE_SCENARIO : ROBUST_SCENARIO;
 
-    const handleAnalyze = async (prompt: string) => {
+    const handleAnalyze = async (prompt: string, agentCount: number) => {
         setError(null);
         setIsLoading(true);
 
         try {
-            const result = await generateAnalysis(prompt);
+            const result = await generateAnalysis(prompt, agentCount);
             setLiveResult(result);
             setScenarioId('live');
             setHasAnalyzed(true);
@@ -513,4 +513,3 @@ const ExecutionResultCard: React.FC<{ result: ExecutionResult }> = ({ result }) 
         </motion.div>
     );
 };
-
