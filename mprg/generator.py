@@ -384,11 +384,13 @@ class ReasoningGuardGenerator:
         except Exception:
             return None
 
-    def generate(self, user_prompt: str) -> Dict[str, Any]:
+    def generate(self, user_prompt: str, num_agents: Optional[int] = None) -> Dict[str, Any]:
         task_id = f"task_{uuid.uuid4().hex[:12]}"
         started = datetime.now(timezone.utc).isoformat()
 
-        roles = AGENT_ROLES[: self.num_agents]
+        requested_agents = num_agents or self.num_agents
+        requested_agents = max(3, min(requested_agents, len(AGENT_ROLES)))
+        roles = AGENT_ROLES[: requested_agents]
         with ThreadPoolExecutor(max_workers=len(roles)) as executor:
             futures = [
                 executor.submit(self._run_agent, task_id, user_prompt, role)

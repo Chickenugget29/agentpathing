@@ -3,23 +3,27 @@ import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 
 interface PromptInputProps {
-    onAnalyze: (prompt: string) => void;
+    onAnalyze: (prompt: string, numAgents: number) => void;
     onDemoAnalyze?: () => void;
     isAnalyzed: boolean;
     isLoading?: boolean;
+    agentCount: number;
+    onAgentCountChange: (count: number) => void;
 }
 
 export const PromptInput: React.FC<PromptInputProps> = ({
     onAnalyze,
     onDemoAnalyze,
     isAnalyzed,
-    isLoading = false
+    isLoading = false,
+    agentCount,
+    onAgentCountChange,
 }) => {
     const [value, setValue] = useState('');
 
     const handleAnalyze = () => {
         if (!value.trim()) return;
-        onAnalyze(value.trim());
+        onAnalyze(value.trim(), agentCount);
     };
 
     const handleDemo = () => {
@@ -30,15 +34,28 @@ export const PromptInput: React.FC<PromptInputProps> = ({
 
     return (
         <div className={`w-full max-w-2xl mx-auto transition-all duration-700 ease-out ${isAnalyzed ? 'mt-8 mb-12' : 'mt-32 mb-8'}`}>
-            <div className="relative group">
+            <div className="space-y-4 bg-[#121214] border border-white/10 rounded-lg p-4 shadow-sm">
                 <textarea
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     placeholder="Describe a task or question for AI agents (e.g., 'How many piano tuners are there in Chicago?')..."
                     disabled={isLoading}
-                    className="w-full h-32 bg-[#121214] border border-white/10 rounded-lg p-4 text-lg text-gray-200 placeholder:text-gray-600 focus:ring-1 focus:ring-white/20 focus:border-white/20 outline-none resize-none transition-all shadow-sm disabled:opacity-50"
+                    className="w-full h-32 bg-black/30 border border-white/10 rounded-lg p-4 text-lg text-gray-200 placeholder:text-gray-600 focus:ring-1 focus:ring-white/20 focus:border-white/20 outline-none resize-none transition-all disabled:opacity-50"
                 />
-                <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <label className="flex-1 text-sm text-gray-400">
+                        Agents planning in parallel
+                        <input
+                            type="range"
+                            min={1}
+                            max={5}
+                            value={agentCount}
+                            onChange={(e) => onAgentCountChange(Number(e.target.value))}
+                            disabled={isLoading}
+                            className="w-full mt-2 accent-white"
+                        />
+                        <span className="text-white font-semibold">{agentCount} agent{agentCount === 1 ? '' : 's'}</span>
+                    </label>
                     {!isAnalyzed ? (
                         <>
                             {/* Demo button */}

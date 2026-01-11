@@ -97,7 +97,7 @@ def generate():
     
     try:
         generator = get_generator()
-        bundle = generator.generate(data["user_prompt"])
+        bundle = generator.generate(data["user_prompt"], num_agents=data.get("num_agents"))
         return jsonify(bundle)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -120,7 +120,10 @@ def create_task():
         task_id = store.create_task(data["input_text"])
         store.update_task(task_id, {"status": "RUNNING"})
         
-        bundle = generator.generate(data["input_text"])
+        bundle = generator.generate(
+            data["input_text"],
+            num_agents=data.get("num_agents")
+        )
         runs = bundle.get("runs", [])
         
         for run in runs:
@@ -216,7 +219,7 @@ def analyze():
     try:
         from mprg.pipeline import result_to_dict
         pipeline = get_pipeline()
-        result = pipeline.analyze(data["task"])
+        result = pipeline.analyze(data["task"], num_agents=data.get("num_agents"))
         return jsonify(result_to_dict(result))
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -19,6 +19,7 @@ function App() {
     const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
     const [isExecuting, setIsExecuting] = useState(false);
     const [executionError, setExecutionError] = useState<string | null>(null);
+    const [agentCount, setAgentCount] = useState(5);
 
     // Get current scenario data
     const currentScenario: Scenario = scenarioId === 'live' && liveResult
@@ -29,12 +30,12 @@ function App() {
         }
         : scenarioId === 'fragile' ? FRAGILE_SCENARIO : ROBUST_SCENARIO;
 
-    const handleAnalyze = async (prompt: string) => {
+    const handleAnalyze = async (prompt: string, numAgents?: number) => {
         setError(null);
         setIsLoading(true);
 
         try {
-            const result = await generateAnalysis(prompt);
+            const result = await generateAnalysis(prompt, numAgents ?? agentCount);
             setLiveResult(result);
             setScenarioId('live');
             setHasAnalyzed(true);
@@ -103,6 +104,8 @@ function App() {
                     onDemoAnalyze={handleDemoAnalyze}
                     isAnalyzed={hasAnalyzed}
                     isLoading={isLoading}
+                    agentCount={agentCount}
+                    onAgentCountChange={setAgentCount}
                 />
 
                 {/* Error Message */}
@@ -513,4 +516,3 @@ const ExecutionResultCard: React.FC<{ result: ExecutionResult }> = ({ result }) 
         </motion.div>
     );
 };
-

@@ -43,7 +43,7 @@ def generate():
         return jsonify({"error": "Missing 'user_prompt' in request body."}), 400
     prompt = data["user_prompt"]
     try:
-        bundle = generator.generate(prompt)
+        bundle = generator.generate(prompt, num_agents=data.get("num_agents"))
         return jsonify(bundle)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -58,7 +58,7 @@ def create_task():
     try:
         task_id = store.create_task(input_text)
         store.update_task(task_id, {"status": "RUNNING"})
-        bundle = generator.generate(input_text)
+        bundle = generator.generate(input_text, num_agents=data.get("num_agents"))
         runs = bundle.get("runs", [])
         for run in runs:
             summary = run.get("reasoning_summary") or {}

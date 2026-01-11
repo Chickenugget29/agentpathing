@@ -85,9 +85,9 @@ interface TaskResponsePayload {
  * Generate reasoning analysis by preferring the task-based backend,
  * falling back to the legacy pipeline if necessary.
  */
-export async function generateAnalysis(userPrompt: string): Promise<AnalysisResult> {
+export async function generateAnalysis(userPrompt: string, numAgents?: number): Promise<AnalysisResult> {
     try {
-        return await generateFromTaskApi(userPrompt);
+        return await generateFromTaskApi(userPrompt, numAgents);
     } catch (taskError) {
         console.warn('Task-based API failed, falling back to pipeline', taskError);
     }
@@ -95,7 +95,7 @@ export async function generateAnalysis(userPrompt: string): Promise<AnalysisResu
     const response = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: userPrompt }),
+        body: JSON.stringify({ task: userPrompt, num_agents: numAgents }),
     });
 
     if (!response.ok) {
@@ -107,11 +107,11 @@ export async function generateAnalysis(userPrompt: string): Promise<AnalysisResu
     return transformPipelineResponse(data);
 }
 
-async function generateFromTaskApi(userPrompt: string): Promise<AnalysisResult> {
+async function generateFromTaskApi(userPrompt: string, numAgents?: number): Promise<AnalysisResult> {
     const createRes = await fetch(`${API_BASE}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input_text: userPrompt }),
+        body: JSON.stringify({ input_text: userPrompt, num_agents: numAgents }),
     });
 
     if (!createRes.ok) {

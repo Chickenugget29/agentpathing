@@ -62,6 +62,7 @@ export interface AnalysisResult {
     runs?: TaskRun[];
     analysisError?: string | null;
     error?: string;
+    agentCount?: number;
 }
 
 export interface Scenario extends AnalysisResult {
