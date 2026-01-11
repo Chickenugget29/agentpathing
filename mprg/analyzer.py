@@ -76,8 +76,8 @@ class ReasoningAnalyzer:
         explanation = response.explanation
         plan = response.plan
         
-        # Layer 1: FOL Translation
-        fol_result = self._translate_to_fol(explanation)
+        # Layer 1: FOL Translation (plan + explanation to capture full chain)
+        fol_result = self._translate_to_fol(f"{plan}\n\n{explanation}")
         predicates = self._extract_predicates(fol_result)
         variables = self._extract_variables(fol_result)
         structure_hash = self._compute_structure_hash(fol_result)
@@ -124,7 +124,7 @@ class ReasoningAnalyzer:
             # Store in vector DB for similarity
             self.vectors.add_reasoning(
                 id=response.agent_id,
-                text=response.explanation,
+                text=analyzed.fol_translation,
                 metadata={
                     "task_id": task_id,
                     "agent_id": response.agent_id,
