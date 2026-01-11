@@ -35,6 +35,11 @@ def compute_families_and_robustness(
     if len(valid_runs) < 2:
         return [], "INSUFFICIENT_DATA", None, {"valid_runs": len(valid_runs)}
 
+    embeddings_available = any(_embedding_from_run(run) for run in valid_runs)
+    if not embeddings_available:
+        text_threshold = min(text_threshold, 0.5)
+        sim_threshold = 1.0
+
     families: List[FamilyResult] = []
     similarity_stats: List[float] = []
     mode_counts = {"embedding": 0, "text": 0}
@@ -112,6 +117,8 @@ def compute_families_and_robustness(
             "clustering_method": "embedding_centroid_with_text_fallback",
             "mode_counts": mode_counts,
             "valid_runs": len(valid_runs),
+            "embeddings_available": embeddings_available,
+            "text_threshold_used": text_threshold,
         }
     )
     return families, robustness, None, debug
@@ -357,4 +364,10 @@ def _similarity_to_family(
 def _text_similarity(text_a: str, text_b: str, _: float) -> float:
     if not text_a or not text_b:
         return 0.0
-    return difflib.SequenceMatcher(None, text_a, text_b).ratio()
+    ratio = difflib.SequenceMatcher(None, text_a, text_b).ratio()
+    tokens_a = set(re.findall(r"[a-z0-9]+", text_a.casefold()))
+    tokens_b = set(re.findall(r"[a-z0-9]+", text_b.casefold()))
+    if not tokens_a or not tokens_b:
+        return ratio
+    jaccard = len(tokens_a & tokens_b) / max(len(tokens_a | tokens_b), 1)
+    return max(ratio, jaccard)

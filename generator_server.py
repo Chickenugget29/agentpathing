@@ -154,6 +154,8 @@ def execute_convergent_plan(task_id: str):
                 "error": "No families found. Cannot execute without convergent reasoning."
             }), 400
         
+        runs = store.get_runs(task_id)
+
         # Find the largest family (most convergent)
         largest_family = max(families, key=lambda f: len(f.get("run_ids", [])))
         family_size = len(largest_family.get("run_ids", []))
@@ -177,7 +179,6 @@ def execute_convergent_plan(task_id: str):
         
         # Get the representative run from the largest family
         rep_run_id = largest_family.get("rep_run_id")
-        runs = store.get_runs(task_id)
         rep_run = next((r for r in runs if r.get("_id") == rep_run_id), None)
         
         if not rep_run:

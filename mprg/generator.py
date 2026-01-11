@@ -325,9 +325,11 @@ def _sanitize_json(text: str) -> str:
     return fixed
 
 
-def _deterministic_embed_input(summary: ReasoningSummary) -> str:
+def _deterministic_embed_input(summary: ReasoningSummary, input_text: str) -> str:
     final_answer = _normalize_answer(summary.final_answer)
-    intent = infer_intent("", summary.final_answer, summary.plan_steps)
+    answer_tokens = final_answer.split()
+    final_answer = " ".join(answer_tokens[:20])
+    intent = infer_intent(input_text, summary.final_answer, summary.plan_steps)
     steps = canonicalize_steps(summary.plan_steps)
     steps_text = "; ".join(steps)
     return f"answer: {final_answer}\nintent: {intent}\nsteps: {steps_text}"
@@ -399,11 +401,18 @@ class ReasoningGuardGenerator:
 
         for run in runs:
             if run.is_valid and run.reasoning_summary:
-                run.intent = infer_intent(user_prompt, run.reasoning_summary.final_answer, run.reasoning_summary.plan_steps)
-                run.canonical_text = _deterministic_embed_input(run.reasoning_summary)
+                run.intent = infer_intent(
+                    user_prompt,
+                    run.reasoning_summary.final_answer,
+                    run.reasoning_summary.plan_steps,
+                )
+                run.canonical_text = _deterministic_embed_input(
+                    run.reasoning_summary,
+                    user_prompt,
+                )
 
         if self.enable_embeddings and self.voyage_key:
-            self._attach_embeddings(runs)
+            self._attach_embeddings(runs, user_prompt)
 
         finished = datetime.now(timezone.utc).isoformat()
         valid_runs = sum(1 for run in runs if run.is_valid)
@@ -662,7 +671,7 @@ class ReasoningGuardGenerator:
             return self._call_anthropic(task_id, user_prompt, role, constraint, strict, repair)
         return self._call_openai(task_id, user_prompt, role, constraint, strict, repair)
 
-    def _attach_embeddings(self, runs: List[TaskRun]) -> None:
+    def _attach_embeddings(self, runs: List[TaskRun], input_text: str) -> None:
         if not self.voyage_key or voyageai is None:
             for run in runs:
                 if run.is_valid:
@@ -673,12 +682,18 @@ class ReasoningGuardGenerator:
         for run in runs:
             if not run.is_valid or not run.reasoning_summary:
                 continue
-            canonical_text = _deterministic_embed_input(run.reasoning_summary)
+            canonical_text = run.canonical_text or _deterministic_embed_input(
+                run.reasoning_summary,
+                input_text,
+            )
             run.canonical_text = canonical_text
-            run.intent = infer_intent("", run.reasoning_summary.final_answer, run.reasoning_summary.plan_steps)
-            input_text = canonical_text
+            run.intent = run.intent or infer_intent(
+                input_text,
+                run.reasoning_summary.final_answer,
+                run.reasoning_summary.plan_steps,
+            )
             try:
-                result = client.embed([input_text], model="voyage-3")
+                result = client.embed([canonical_text], model="voyage-3")
                 run.embedding_vector = result.embeddings[0]
             except Exception as exc:
                 run.embedding_error = str(exc)
