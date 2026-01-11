@@ -7,6 +7,7 @@ import type {
     RobustnessOverview,
     TaskFamily,
     TaskRun,
+    ExecutionResult,
 } from './types';
 
 const API_BASE =
@@ -160,23 +161,23 @@ function transformPipelineResponse(data: PipelineResponse): AnalysisResult {
 
     const gateDecision = data.gate_decision
         ? ({
-              decision: data.gate_decision.decision,
-              reason: data.gate_decision.reason,
-              action: data.gate_decision.action,
-              suggestion: data.gate_decision.suggestion,
-              color: data.gate_decision.color,
-              icon: data.gate_decision.icon,
-          } satisfies GateDecisionInfo)
+            decision: data.gate_decision.decision,
+            reason: data.gate_decision.reason,
+            action: data.gate_decision.action,
+            suggestion: data.gate_decision.suggestion,
+            color: data.gate_decision.color,
+            icon: data.gate_decision.icon,
+        } satisfies GateDecisionInfo)
         : undefined;
 
     const robustness = data.robustness
         ? ({
-              totalAgents: data.robustness.total_agents ?? agents.length,
-              distinctFamilies: data.robustness.distinct_families ?? 0,
-              confidence: data.robustness.confidence ?? 'Low',
-              explanation: data.robustness.explanation,
-              recommendation: data.robustness.recommendation,
-          } satisfies RobustnessOverview)
+            totalAgents: data.robustness.total_agents ?? agents.length,
+            distinctFamilies: data.robustness.distinct_families ?? 0,
+            confidence: data.robustness.confidence ?? 'Low',
+            explanation: data.robustness.explanation,
+            recommendation: data.robustness.recommendation,
+        } satisfies RobustnessOverview)
         : undefined;
 
     const derivedTrust = determineTrustLevel(
@@ -398,4 +399,23 @@ function calculateTrustFromAgents(
         trustLevel: 'Uncertain',
         trustDescription: 'Mixed agreement. Inspect reasoning differences manually.',
     };
+}
+
+/**
+ * Execute the convergent plan for a task.
+ * This runs a final agent that takes the most agreed-upon reasoning path
+ * and executes it to generate a final result.
+ */
+export async function executeConvergentPlan(taskId: string): Promise<ExecutionResult> {
+    const response = await fetch(`${API_BASE}/tasks/${taskId}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+        const error = await safeJson(response);
+        throw new Error(error?.error || 'Failed to execute plan');
+    }
+
+    return response.json();
 }
