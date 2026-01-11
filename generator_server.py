@@ -159,10 +159,21 @@ def execute_convergent_plan(task_id: str):
         family_size = len(largest_family.get("run_ids", []))
         
         if family_size < 2:
-            return jsonify({
-                "error": "No convergent family detected (largest family has < 2 runs).",
-                "recommendation": "Need more agreement between agents before execution."
-            }), 400
+            # Fallback: pick a random run to execute instead of erroring
+            import random
+            fallback_run = random.choice(runs) if runs else None
+            if not fallback_run:
+                return jsonify({
+                    "error": "No runs available to execute.",
+                    "recommendation": "Generate runs before executing."
+                }), 400
+            rep_run = fallback_run
+            family_size = 1
+            largest_family = {
+                "family_id": "fallback_random",
+                "run_ids": [fallback_run.get("_id")],
+                "rep_run_id": fallback_run.get("_id"),
+            }
         
         # Get the representative run from the largest family
         rep_run_id = largest_family.get("rep_run_id")
