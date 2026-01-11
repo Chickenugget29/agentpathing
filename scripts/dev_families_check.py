@@ -18,6 +18,7 @@ def main() -> None:
             "assumptions": ["API returns JSON"],
             "final_answer": "Use batch ETL",
             "is_valid": True,
+            "canonical_text": "answer: use batch etl\nintent: planning\nsteps: fetch data; transform data; store results",
             "raw_json": {"reasoning_summary": {"fallbacks": ["Retry on failure"]}},
         },
         {
@@ -26,6 +27,7 @@ def main() -> None:
             "assumptions": ["API returns JSON"],
             "final_answer": "Use batch ETL",
             "is_valid": True,
+            "canonical_text": "answer: use batch etl\nintent: planning\nsteps: fetch data; transform data; store results",
             "raw_json": {"reasoning_summary": {"fallbacks": ["Retry on failure"]}},
         },
         {
@@ -34,6 +36,7 @@ def main() -> None:
             "assumptions": ["Events arrive continuously"],
             "final_answer": "Use streaming",
             "is_valid": True,
+            "canonical_text": "answer: use streaming\nintent: planning\nsteps: stream events; validate schema; update sink",
             "raw_json": {"reasoning_summary": {"fallbacks": ["Buffer and replay"]}},
         },
     ]

@@ -15,6 +15,7 @@ export interface TaskRun {
     planSteps?: string[];
     assumptions?: string[];
     isValid?: boolean;
+    error?: string | null;
 }
 
 export interface ReasoningStep {

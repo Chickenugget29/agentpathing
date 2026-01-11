@@ -14,6 +14,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 import re
+import difflib
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -145,6 +146,8 @@ class TaskRun:
     error: Optional[str]
     embedding_vector: Optional[List[float]]
     embedding_error: Optional[str]
+    canonical_text: Optional[str]
+    intent: Optional[str]
 
 
 @dataclass
@@ -216,6 +219,73 @@ def _clean_plan_step(text: str) -> str:
     return cleaned.strip()
 
 
+def _normalize_answer(text: str) -> str:
+    lowered = text.casefold().strip()
+    cleaned = re.sub(r"[^\w\s\.\-]", "", lowered)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def infer_intent(input_text: str, final_answer: str, plan_steps: List[str]) -> str:
+    combined = " ".join([input_text or "", final_answer or "", " ".join(plan_steps or [])]).casefold()
+    if re.search(r"\b\d+(\.\d+)?\b", combined) and re.search(r"[\+\-\*\/]", combined):
+        return "math"
+    if any(token in combined for token in ["code", "bug", "compile", "stacktrace", "function", "class", "api", "endpoint", "regex"]):
+        return "code"
+    if any(token in combined for token in ["plan", "workflow", "steps", "schedule", "rollout", "timeline", "migrate"]):
+        return "planning"
+    if any(token in combined for token in ["explain", "why", "how", "describe", "summarize"]):
+        return "explanation"
+    if any(token in combined for token in ["choose", "decide", "recommend", "tradeoff", "option"]):
+        return "decision"
+    if any(token in combined for token in ["classify", "label", "categorize", "sentiment"]):
+        return "classification"
+    return "general"
+
+
+def canonicalize_steps(plan_steps: List[str]) -> List[str]:
+    filler_verbs = {"define", "identify", "review", "analyze", "consider", "implement", "monitor", "ensure", "design"}
+    boilerplate_phrases = [
+        "monitor", "alert", "logging", "observability", "security", "compliance", "retry", "rollback"
+    ]
+    stopwords = {"the", "a", "an", "to", "and", "or", "of", "in", "for", "on", "with", "by", "from"}
+
+    cleaned_steps = []
+    for step in plan_steps or []:
+        cleaned = _clean_plan_step(step).casefold()
+        if not cleaned:
+            continue
+        if any(phrase in cleaned for phrase in boilerplate_phrases):
+            continue
+        tokens = re.findall(r"[a-z0-9]+", cleaned)
+        if len(tokens) < 3:
+            continue
+        if tokens and tokens[0] in filler_verbs:
+            tokens = tokens[1:]
+        cleaned_steps.append(" ".join(tokens).strip())
+
+    deduped = []
+    for step in cleaned_steps:
+        if any(_near_duplicate(step, existing) for existing in deduped):
+            continue
+        deduped.append(step)
+
+    scored = []
+    for step in deduped:
+        tokens = re.findall(r"[a-z0-9]+", step)
+        if len(tokens) < 3:
+            continue
+        noun_density = sum(1 for t in tokens if t not in stopwords) / max(len(tokens), 1)
+        scored.append((len(tokens) + noun_density * 3, step))
+
+    scored.sort(reverse=True, key=lambda item: item[0])
+    top_steps = [step for _, step in scored][:5]
+    return top_steps[:3] if len(top_steps) < 3 else top_steps
+
+
+def _near_duplicate(a: str, b: str) -> bool:
+    return difflib.SequenceMatcher(None, a, b).ratio() > 0.9
+
+
 def _extract_json(response: str) -> Optional[Dict[str, Any]]:
     cleaned = response.strip()
     cleaned = re.sub(r"^```(?:json)?", "", cleaned, flags=re.I).strip()
@@ -256,10 +326,11 @@ def _sanitize_json(text: str) -> str:
 
 
 def _deterministic_embed_input(summary: ReasoningSummary) -> str:
-    plan = "\n".join(f"{idx + 1}. {step}" for idx, step in enumerate(summary.plan_steps))
-    assumptions = "\n".join(f"- {item}" for item in summary.assumptions)
-    fallbacks = "\n".join(f"- {item}" for item in summary.fallbacks)
-    return f"PLAN:\n{plan}\nASSUMPTIONS:\n{assumptions}\nFALLBACKS:\n{fallbacks}"
+    final_answer = _normalize_answer(summary.final_answer)
+    intent = infer_intent("", summary.final_answer, summary.plan_steps)
+    steps = canonicalize_steps(summary.plan_steps)
+    steps_text = "; ".join(steps)
+    return f"answer: {final_answer}\nintent: {intent}\nsteps: {steps_text}"
 
 
 class ReasoningGuardGenerator:
@@ -325,6 +396,11 @@ class ReasoningGuardGenerator:
             ]
             runs = [future.result() for future in futures]
 
+        for run in runs:
+            if run.is_valid and run.reasoning_summary:
+                run.intent = infer_intent(user_prompt, run.reasoning_summary.final_answer, run.reasoning_summary.plan_steps)
+                run.canonical_text = _deterministic_embed_input(run.reasoning_summary)
+
         if self.enable_embeddings and self.voyage_key:
             self._attach_embeddings(runs)
 
@@ -368,6 +444,8 @@ class ReasoningGuardGenerator:
                 error=None,
                 embedding_vector=None,
                 embedding_error=None,
+                canonical_text=None,
+                intent=None,
             )
 
         retry = self._call_llm(task_id, user_prompt, role, constraint, strict=True)
@@ -381,6 +459,8 @@ class ReasoningGuardGenerator:
                 error=None,
                 embedding_vector=None,
                 embedding_error=None,
+                canonical_text=None,
+                intent=None,
             )
 
         numbering_error = "plan_steps must not include numbering prefixes"
@@ -398,6 +478,8 @@ class ReasoningGuardGenerator:
                     error=None,
                     embedding_vector=None,
                     embedding_error=None,
+                    canonical_text=None,
+                    intent=None,
                 )
             error_retry = error_repair or error_retry
 
@@ -408,6 +490,8 @@ class ReasoningGuardGenerator:
             error=error_retry or error or "Invalid JSON or schema.",
             embedding_vector=None,
             embedding_error=None,
+            canonical_text=None,
+            intent=None,
         )
 
     def _validate_or_error(
@@ -583,7 +667,10 @@ class ReasoningGuardGenerator:
         for run in runs:
             if not run.is_valid or not run.reasoning_summary:
                 continue
-            input_text = _deterministic_embed_input(run.reasoning_summary)
+            canonical_text = _deterministic_embed_input(run.reasoning_summary)
+            run.canonical_text = canonical_text
+            run.intent = infer_intent("", run.reasoning_summary.final_answer, run.reasoning_summary.plan_steps)
+            input_text = canonical_text
             try:
                 result = client.embed([input_text], model="voyage-3")
                 run.embedding_vector = result.embeddings[0]
@@ -602,6 +689,8 @@ def _serialize_task_bundle(bundle: TaskBundle) -> Dict[str, Any]:
             "error": run.error,
             "embedding_vector": run.embedding_vector,
             "embedding_error": run.embedding_error,
+            "canonical_text": run.canonical_text,
+            "intent": run.intent,
         }
 
     return {

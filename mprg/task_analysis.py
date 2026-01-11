@@ -52,8 +52,9 @@ def compute_families_and_robustness(
         best_similarity = -1.0
         best_mode = "embedding"
         for family in families:
+            rep_run = _find_run_by_id(valid_runs, family.rep_run_id)
             sim, mode = _similarity_to_family(
-                run, family, signature_cache, text_threshold
+                run, family, signature_cache, text_threshold, rep_run
             )
             if sim > best_similarity:
                 best_similarity = sim
@@ -105,6 +106,7 @@ def compute_families_and_robustness(
         {
             "families_before_merge": families_before_merge,
             "families_after_merge": len(families),
+            "num_families": len(families),
             "threshold_used": sim_threshold,
             "min_cluster_size": min_cluster_size,
             "clustering_method": "embedding_centroid_with_text_fallback",
@@ -177,8 +179,9 @@ def _merge_singletons(
         best_sim = -1.0
         best_mode = "embedding"
         for target in large_families:
+            rep_run = _find_run_by_id(runs, target.rep_run_id)
             sim, mode = _similarity_to_family(
-                run, target, signature_cache, text_threshold
+                run, target, signature_cache, text_threshold, rep_run
             )
             if sim > best_sim:
                 best_sim = sim
@@ -247,6 +250,32 @@ def _is_simple_numeric(text: str) -> bool:
     return bool(re.fullmatch(r"\d+(\.\d+)?", text))
 
 
+def _apply_answer_first_rule(
+    run: Dict[str, Any],
+    rep_run: Optional[Dict[str, Any]],
+    similarity: float,
+) -> float:
+    if not rep_run:
+        return similarity
+    answer_a = _normalize_answer(run.get("final_answer", "") or "")
+    answer_b = _normalize_answer(rep_run.get("final_answer", "") or "")
+    if not answer_a or not answer_b:
+        return similarity
+    if answer_a != answer_b:
+        return similarity
+    if _is_short_deterministic(answer_a):
+        return max(similarity, 0.95)
+    return similarity
+
+
+def _is_short_deterministic(text: str) -> bool:
+    if len(text) > 12:
+        return False
+    if _is_simple_numeric(text):
+        return True
+    return bool(re.fullmatch(r"[a-z0-9\s\-]{1,12}", text))
+
+
 def _debug_stats(
     families: List[FamilyResult],
     runs: List[Dict[str, Any]],
@@ -280,6 +309,9 @@ def _debug_stats(
 
 
 def _build_signature_text(run: Dict[str, Any]) -> str:
+    canonical = run.get("canonical_text") or ""
+    if canonical:
+        return canonical
     final_answer = (run.get("final_answer") or "").strip()
     plan_steps = run.get("plan_steps") or []
     assumptions = run.get("assumptions") or []
@@ -305,16 +337,21 @@ def _similarity_to_family(
     family: FamilyResult,
     signature_cache: Dict[str, str],
     text_threshold: float,
+    rep_run: Optional[Dict[str, Any]],
 ) -> Tuple[float, str]:
     embedding = _embedding_from_run(run)
     if embedding and family.centroid:
-        return _cosine_similarity(embedding, family.centroid), "embedding"
+        sim = _cosine_similarity(embedding, family.centroid)
+        sim = _apply_answer_first_rule(run, rep_run, sim)
+        return sim, "embedding"
     run_id = _run_id(run)
     signature = signature_cache.get(run_id, _build_signature_text(run))
     rep_signature = family.rep_signature
     if not rep_signature:
         rep_signature = signature_cache.get(family.rep_run_id, "")
-    return _text_similarity(signature, rep_signature, text_threshold), "text"
+    sim = _text_similarity(signature, rep_signature, text_threshold)
+    sim = _apply_answer_first_rule(run, rep_run, sim)
+    return sim, "text"
 
 
 def _text_similarity(text_a: str, text_b: str, _: float) -> float:

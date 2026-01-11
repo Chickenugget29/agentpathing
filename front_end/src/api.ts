@@ -11,7 +11,7 @@ import type {
 
 const API_BASE =
     (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) ||
-    '/api';
+    'http://localhost:5050';
 
 const AGENT_NAMES = ['Agent Alpha', 'Agent Beta', 'Agent Gamma', 'Agent Delta', 'Agent Epsilon'];
 const AGENT_IDS = ['A', 'B', 'C', 'D', 'E'];
@@ -75,6 +75,7 @@ interface TaskResponsePayload {
         assumptions?: string[];
         final_answer?: string;
         is_valid?: boolean;
+        error?: string | null;
         raw_json?: Record<string, any>;
     }>;
 }
@@ -213,6 +214,7 @@ function transformTaskPayload(taskId: string, payload: TaskResponsePayload): Ana
             planSteps: run.plan_steps?.length ? run.plan_steps : summary.plan_steps || [],
             assumptions: run.assumptions?.length ? run.assumptions : summary.assumptions || [],
             isValid: run.is_valid,
+            error: run.error ?? null,
         };
     });
     const agents: AgentData[] = runs.slice(0, AGENT_IDS.length).map((run, index) => {

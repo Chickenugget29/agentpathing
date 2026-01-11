@@ -71,6 +71,8 @@ def create_task():
                     "final_answer": summary.get("final_answer", ""),
                     "is_valid": run.get("is_valid", False),
                     "error": run.get("error"),
+                    "canonical_text": run.get("canonical_text"),
+                    "intent": run.get("intent"),
                     "raw_json": run,
                 },
             )
@@ -100,6 +102,8 @@ def create_run(task_id: str):
                 "final_answer": summary.get("final_answer", ""),
                 "is_valid": run.get("is_valid", False),
                 "error": run.get("error"),
+                "canonical_text": run.get("canonical_text"),
+                "intent": run.get("intent"),
                 "raw_json": run,
             },
         )

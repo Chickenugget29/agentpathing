@@ -168,11 +168,13 @@ const LiveFamiliesSection: React.FC<{ result: AnalysisResult }> = ({ result }) =
     const metrics = useMemo(() => {
         const validRuns = runs.filter((run) => run.isValid).length;
         const totalRuns = runs.length;
-        const familyCount = families.length;
-        const robustnessStatus = (result.summary || '').toUpperCase().replace('ROBUSTNESS:', '').trim() || result.trustLevel.toUpperCase();
+        const familyCount = result.robustness?.distinctFamilies ?? families.length;
+        const robustnessStatus =
+            (result.summary || '').toUpperCase().replace('ROBUSTNESS:', '').trim() ||
+            result.trustLevel.toUpperCase();
         const agreement = computeAnswerAgreement(runs);
         return { validRuns, totalRuns, familyCount, robustnessStatus, agreement };
-    }, [runs, families, result.summary, result.trustLevel]);
+    }, [runs, families, result.summary, result.trustLevel, result.robustness]);
 
     const { groups, unassigned } = useMemo(() => buildFamilyGroups(families, runs), [families, runs]);
 
@@ -275,6 +277,9 @@ const RunCard: React.FC<{ run: TaskRun; index: number; highlight?: boolean; labe
             <div className="text-sm text-gray-300">
                 <span className="font-semibold text-white">Final answer:</span> {run.finalAnswer || 'No answer provided'}
             </div>
+            {run.error && (
+                <div className="text-xs text-red-200">Error: {run.error}</div>
+            )}
             <div>
                 <div className="text-xs uppercase tracking-wide text-gray-500">Plan Steps</div>
                 <div className="flex flex-wrap gap-2 mt-1">
